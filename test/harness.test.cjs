@@ -25,10 +25,9 @@ test("repository has four owned areas and no legacy deploy surface", () => {
 });
 
 test("package uses native Pi resources and a strict publication allowlist", () => {
-  assert.deepEqual(packageJson.pi, {
-    extensions: ["./harness/extensions"],
-    skills: ["./skills"],
-  });
+  // No `skills` key: shared skills reach agents through ~/.agents/skills only.
+  // Re-adding it makes Pi load every skill a second time from the package.
+  assert.deepEqual(packageJson.pi, { extensions: ["./harness/extensions"] });
   assert.equal(packageJson.bin["kirin-pi"], "./harness/setup.cjs");
   assert.deepEqual(packageJson.files, ["harness", "skills", "docs", "README.md", "LICENSE", "LICENSE-APACHE"]);
   assert.equal(packageJson.dependencies, undefined);
