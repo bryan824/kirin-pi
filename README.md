@@ -18,7 +18,7 @@ Pi loads package resources natively from `package.json`. No custom deploy layer,
 
 ## Workflow
 
-Routing lives in the bootstrap instruction block. Skills own one mode each.
+Routing lives in the global instruction block installed by `kirin-pi setup`. Skills own one mode each.
 
 ```text
 small: design -> implement -> verify -> commit
@@ -95,71 +95,28 @@ Presets target `@tintinweb/pi-subagents` and use its native model, thinking, iso
 
 Built-in `general-purpose` and `Plan` remain available. Global subagent settings use compact tool prose, finite graceful turn limits, schedules off, and transcripts off by default; worker/reviewer opt back in.
 
-## Install
+## Install or update
 
-### Pi
-
-Global package:
+Requires Pi and Bun. Run one command:
 
 ```bash
-pi install git:github.com/bryan824/kirin-pi
+bunx github:bryan824/kirin-pi setup
 ```
 
-Project package:
+It idempotently:
 
-```bash
-pi install -l git:github.com/bryan824/kirin-pi
-```
+- installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access`
+- enables all Kirin extensions while disabling package-owned skill discovery
+- links workflow, maintenance, and Herdr skills through `~/.agents/skills`
+- links the same skills into Claude Code
+- syncs the seven Pi agent presets and compact subagent defaults
+- owns one global Pi `AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
 
-Use Pi package filters to keep domain skills opt-in. Example global core:
+Existing colliding skill, agent, or instruction paths are backed up before replacement. Restart Pi and Claude Code afterward.
 
-```json
-{
-  "packages": [
-    {
-      "source": "git:github.com/bryan824/kirin-pi",
-      "extensions": ["harness/extensions/*.ts", "harness/extensions/*/index.ts"],
-      "skills": ["skills/workflow/*", "skills/maintenance/*", "skills/domain/herdr"]
-    }
-  ]
-}
-```
+Rerun the same command whenever you want to update. Domain skills such as Rust, Python tooling, teaching, and UI design remain project opt-in under `.agents/skills/` or `.pi/skills/`.
 
-A Rust project can override the same package locally:
-
-```json
-{
-  "packages": [
-    {
-      "source": "git:github.com/bryan824/kirin-pi",
-      "extensions": ["harness/extensions/*.ts", "harness/extensions/*/index.ts"],
-      "skills": ["skills/workflow/*", "skills/maintenance/*", "skills/domain/herdr", "skills/domain/rust"]
-    }
-  ]
-}
-```
-
-Project entries replace the matching global package entry, so repeat core paths.
-
-Companion runtime capabilities used by presets must be installed separately: `@tintinweb/pi-subagents` and `pi-web-access`.
-
-### Claude Code
-
-Install selected portable skills with the standard skills installer:
-
-```bash
-bunx skills@latest add bryan824/kirin-pi --agent claude-code
-```
-
-### Workflow bootstrap
-
-Install the small routing block without overwriting surrounding instructions:
-
-```bash
-bunx github:bryan824/kirin-pi bootstrap workflow --global --agents pi,claude-code
-# project scope:
-bunx github:bryan824/kirin-pi bootstrap workflow --project --agents all
-```
+Herdr integration and guidance are included; the Herdr application itself remains a separate system install.
 
 ## Project memory
 

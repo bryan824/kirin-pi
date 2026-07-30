@@ -9,7 +9,7 @@
   },
   "repository": "github:bryan824/kirin-pi",
   "bin": {
-    "kirin-pi": "./harness/bootstrap.cjs"
+    "kirin-pi": "./harness/setup.cjs"
   },
   "keywords": [
     "pi-package",
@@ -42,7 +42,7 @@
     "typebox": "*"
   },
   "scripts": {
-    "kirin-pi": "bun harness/bootstrap.cjs",
+    "kirin-pi": "bun harness/setup.cjs",
     "test": "bun test test/*.test.cjs test/*.test.ts",
     "memory:check": "bun skills/maintenance/project-memory/scripts/project-memory.cjs check",
     "memory:init": "bun skills/maintenance/project-memory/scripts/project-memory.cjs init",

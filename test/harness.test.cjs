@@ -29,7 +29,7 @@ test("package uses native Pi resources and a strict publication allowlist", () =
     extensions: ["./harness/extensions"],
     skills: ["./skills"],
   });
-  assert.equal(packageJson.bin["kirin-pi"], "./harness/bootstrap.cjs");
+  assert.equal(packageJson.bin["kirin-pi"], "./harness/setup.cjs");
   assert.deepEqual(packageJson.files, ["harness", "skills", "docs", "README.md", "LICENSE", "LICENSE-APACHE"]);
   assert.equal(packageJson.dependencies, undefined);
   assert.equal(fs.existsSync(path.join(root, "bun.lock")), false);
