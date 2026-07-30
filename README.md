@@ -97,22 +97,21 @@ Built-in `general-purpose` and `Plan` remain available. Global subagent settings
 
 ## Install or update
 
-Requires Pi and Bun. Run one command (the explicit branch avoids stale Bun Git caches):
+Requires Bun. Scope is always global; there are no subcommands or flags. Same name either way — `bunx` fetches, `bun` uses the checkout you are standing in:
 
 ```bash
-bunx 'github:bryan824/kirin-pi#main' setup
+bunx 'github:bryan824/kirin-pi#main'   # any machine, from GitHub
+bun run kirin-pi                       # inside a checkout, from the working tree
 ```
 
 It idempotently:
 
-- installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access`
-- enables all Kirin extensions while disabling package-owned skill discovery
-- links workflow, maintenance, and Herdr skills through `~/.agents/skills`
-- links the same skills into Claude Code
-- syncs the seven Pi agent presets and compact subagent defaults
-- owns one global Pi `AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
+- installs workflow, maintenance, and Herdr skills under `~/.agents/skills`
+- links the same skills under `~/.claude/skills`
+- owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
+- when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
 
-Existing colliding skill, agent, or instruction paths are backed up before replacement. Restart Pi and Claude Code afterward.
+Existing colliding skill, agent, or instruction paths are backed up before replacement. Restart active agents afterward.
 
 Rerun the same command whenever you want to update. Domain skills such as Rust, Python tooling, teaching, and UI design remain project opt-in under `.agents/skills/` or `.pi/skills/`.
 

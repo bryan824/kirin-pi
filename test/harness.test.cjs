@@ -53,10 +53,14 @@ test("upstream repository references stay in the ledger except explicit Herdr sy
   }
 });
 
-test("README uses the cache-safe one-command installer", () => {
+test("README documents the remote and checkout install sources", () => {
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
-  assert.match(readme, /bunx 'github:bryan824\/kirin-pi#main' setup/);
+  assert.match(readme, /bunx 'github:bryan824\/kirin-pi#main'/);
+  assert.match(readme, /bun run kirin-pi\b/);
   assert.doesNotMatch(readme, /bootstrap workflow/);
+  // `bun kirin-pi` is the package script; no link step or node_modules required.
+  assert.equal(packageJson.scripts["kirin-pi"], "bun harness/setup.cjs");
+  assert.equal(packageJson.scripts.link, undefined);
 });
 
 test("required legal and current-truth docs exist", () => {

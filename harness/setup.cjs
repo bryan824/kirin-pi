@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// One idempotent global install/update for Bryan's Pi + Claude harness.
+// One idempotent global install/update for Bryan's shared agent harness.
 
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -12,10 +12,6 @@ const REQUIRED_PACKAGES = [
   KIRIN_SOURCE,
   "npm:@tintinweb/pi-subagents",
   "npm:pi-web-access",
-];
-const EXTENSION_FILTERS = [
-  "harness/extensions/*.ts",
-  "harness/extensions/*/index.ts",
 ];
 const SUBAGENT_DEFAULTS = {
   defaultMaxTurns: 30,
@@ -61,34 +57,26 @@ const WORKFLOW = [
 
 function usage() {
   return `Usage:
-  kirin-pi setup [--dry-run] [--home DIR]
+  bunx 'github:bryan824/kirin-pi#main'   any machine, from GitHub
+  bun run kirin-pi                       inside a checkout, from the working tree
 
-Installs or updates the complete global Kirin harness for Pi and Claude Code:
-- Kirin, pi-subagents, and pi-web-access Pi packages
-- Kirin extensions with package skills disabled
-- shared workflow, maintenance, and Herdr skills in ~/.agents/skills
-- seven Pi subagent presets and compact subagent defaults
+Installs or updates the global Kirin harness:
+- shared workflow, maintenance, and Herdr skills for all agents
 - one canonical global AGENTS.md imported by Claude Code
+- Pi packages, agent presets, and subagent defaults when pi is in PATH
 
 Rerun the same command to update everything.
 `;
 }
 
 function parse(argv) {
-  if (argv.length === 0 || argv.includes("-h") || argv.includes("--help")) {
+  if (argv.length === 0 || (argv.length === 1 && argv[0] === "setup")) {
+    return { help: false, dryRun: false, home: os.homedir() };
+  }
+  if (argv.length === 1 && ["-h", "--help"].includes(argv[0])) {
     return { help: true, dryRun: false, home: os.homedir() };
   }
-  if (argv[0] !== "setup") throw new Error("Expected `kirin-pi setup`.");
-
-  const options = { help: false, dryRun: false, home: os.homedir() };
-  for (let i = 1; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg === "--dry-run") options.dryRun = true;
-    else if (arg === "--global") continue;
-    else if (arg === "--home" && argv[i + 1]) options.home = path.resolve(argv[++i]);
-    else throw new Error(`Unknown option "${arg}".`);
-  }
-  return options;
+  throw new Error("Kirin setup takes no options. Run `bunx github:bryan824/kirin-pi`.");
 }
 
 function readJson(file, fallback = {}) {
@@ -132,8 +120,24 @@ function packageActions(settings) {
   }));
 }
 
-function ensurePackages(home, actions) {
-  const pi = process.env.PI_BIN || "pi";
+function findExecutable(name, searchPath = process.env.PATH ?? "") {
+  const override = name.includes(path.sep) ? name : undefined;
+  const candidates = override ? [override] : searchPath.split(path.delimiter).map((dir) => path.join(dir, name));
+  return candidates.find((candidate) => {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function piBinary() {
+  return process.env.PI_BIN ? findExecutable(process.env.PI_BIN) : findExecutable("pi");
+}
+
+function ensurePackages(home, actions, pi) {
   for (const { source, action } of actions) {
     const result = spawnSync(pi, [action, source], {
       env: { ...process.env, HOME: home },
@@ -142,28 +146,6 @@ function ensurePackages(home, actions) {
     if (result.error) throw new Error(`Cannot run ${pi}: ${result.error.message}`);
     if (result.status !== 0) throw new Error(`pi ${action} ${source} failed with status ${result.status}.`);
   }
-}
-
-function configurePiSettings(file) {
-  const settings = readJson(file, {});
-  const packages = Array.isArray(settings.packages) ? [...settings.packages] : [];
-  const index = packages.findIndex((entry) => packageSource(entry) === KIRIN_SOURCE);
-  const configured = {
-    ...(index >= 0 && typeof packages[index] === "object" ? packages[index] : {}),
-    source: KIRIN_SOURCE,
-    extensions: EXTENSION_FILTERS,
-    skills: [],
-  };
-
-  if (index >= 0) packages[index] = configured;
-  else packages.unshift(configured);
-  for (const source of REQUIRED_PACKAGES.slice(1)) {
-    if (!packages.some((entry) => packageSource(entry) === source)) packages.push(source);
-  }
-
-  settings.packages = packages;
-  writeJson(file, settings);
-  return settings;
 }
 
 function installBlock(existing) {
@@ -227,11 +209,11 @@ function ensureLink(source, target, backupDir) {
   return { status: current ? "replaced" : "added", backup };
 }
 
-function sharedSkillSources(checkout) {
+function sharedSkillSources(packageRoot) {
   const roots = [
-    path.join(checkout, "skills", "workflow"),
-    path.join(checkout, "skills", "maintenance"),
-    path.join(checkout, "skills", "domain", "herdr"),
+    path.join(packageRoot, "skills", "workflow"),
+    path.join(packageRoot, "skills", "maintenance"),
+    path.join(packageRoot, "skills", "domain", "herdr"),
   ];
   const skills = [];
   for (const root of roots) {
@@ -250,8 +232,8 @@ function sharedSkillSources(checkout) {
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function optInSkillNames(checkout) {
-  const domain = path.join(checkout, "skills", "domain");
+function optInSkillNames(packageRoot) {
+  const domain = path.join(packageRoot, "skills", "domain");
   if (!fs.existsSync(domain)) return [];
   return fs.readdirSync(domain, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== "herdr")
@@ -260,13 +242,39 @@ function optInSkillNames(checkout) {
     .sort();
 }
 
-function syncSharedSkills(checkout, home, runId) {
+function installSkillSnapshot(packageRoot, home, runId) {
+  const sourceSkills = sharedSkillSources(packageRoot);
+  const base = path.join(home, ".local", "share", "kirin-pi");
+  const target = path.join(base, "skills");
+  const temp = path.join(base, `.skills-${process.pid}`);
+  const backups = [];
+
+  fs.rmSync(temp, { recursive: true, force: true });
+  fs.mkdirSync(temp, { recursive: true });
+  for (const skill of sourceSkills) {
+    fs.cpSync(skill.source, path.join(temp, skill.name), { recursive: true });
+  }
+  fs.writeFileSync(path.join(temp, ".managed-by-kirin"), "Generated by `kirin-pi setup`; edit source skills instead.\n", "utf8");
+
+  if (lstat(target)) {
+    if (fs.existsSync(path.join(target, ".managed-by-kirin"))) fs.rmSync(target, { recursive: true, force: true });
+    else backups.push(backupExisting(target, path.join(base, "backups", runId)));
+  }
+  fs.renameSync(temp, target);
+
+  return {
+    skills: sourceSkills.map((skill) => ({ name: skill.name, source: path.join(target, skill.name) })),
+    backups,
+  };
+}
+
+function syncSharedSkills(packageRoot, home, runId) {
   const sharedDir = path.join(home, ".agents", "skills");
   const claudeDir = path.join(home, ".claude", "skills");
-  const backups = [];
-  const skills = sharedSkillSources(checkout);
+  const snapshot = installSkillSnapshot(packageRoot, home, runId);
+  const backups = [...snapshot.backups];
 
-  for (const name of optInSkillNames(checkout)) {
+  for (const name of optInSkillNames(packageRoot)) {
     for (const [target, backup] of [
       [path.join(sharedDir, name), path.join(home, ".agents", "kirin-backups", runId, "opt-in-skills")],
       [path.join(claudeDir, name), path.join(home, ".claude", "kirin-backups", runId, "opt-in-skills")],
@@ -275,7 +283,7 @@ function syncSharedSkills(checkout, home, runId) {
     }
   }
 
-  for (const skill of skills) {
+  for (const skill of snapshot.skills) {
     const shared = ensureLink(
       skill.source,
       path.join(sharedDir, skill.name),
@@ -291,7 +299,7 @@ function syncSharedSkills(checkout, home, runId) {
     if (claude.backup) backups.push(claude.backup);
   }
 
-  return { count: skills.length, backups };
+  return { count: snapshot.skills.length, backups };
 }
 
 function syncAgents(sourceDir, targetDir, backupDir) {
@@ -313,71 +321,90 @@ function mergeSubagentSettings(file) {
   writeJson(file, { ...current, ...SUBAGENT_DEFAULTS });
 }
 
-function installInstructions(home, runId) {
+function installInstructions(home, runId, withPi) {
+  const canonical = path.join(home, ".agents", "AGENTS.md");
   const piAgents = path.join(home, ".pi", "agent", "AGENTS.md");
-  const existingPi = fs.existsSync(piAgents) ? fs.readFileSync(piAgents, "utf8") : "";
-  const canonicalPi = installBlock(existingPi);
-  writeFileAtomic(piAgents, canonicalPi);
+  const existing = fs.existsSync(canonical)
+    ? fs.readFileSync(canonical, "utf8")
+    : fs.existsSync(piAgents)
+      ? fs.readFileSync(piAgents, "utf8")
+      : "";
+  const canonicalContent = installBlock(existing);
+  writeFileAtomic(canonical, canonicalContent);
+
+  const backups = [];
+  if (withPi) {
+    const piLink = ensureLink(
+      canonical,
+      piAgents,
+      path.join(home, ".pi", "agent", "kirin-backups", runId, "instructions"),
+    );
+    if (piLink.backup) backups.push(piLink.backup);
+  }
 
   const claudeAgents = path.join(home, ".claude", "AGENTS.md");
-  const link = ensureLink(
-    piAgents,
+  const claudeLink = ensureLink(
+    canonical,
     claudeAgents,
     path.join(home, ".claude", "kirin-backups", runId, "instructions"),
   );
+  if (claudeLink.backup) backups.push(claudeLink.backup);
 
   const claudeFile = path.join(home, ".claude", "CLAUDE.md");
   let remaining = fs.existsSync(claudeFile) ? fs.readFileSync(claudeFile, "utf8") : "";
   remaining = removeBlock(remaining, START, END);
   const claudeRatchet = blockText(remaining, RATCHET_START, RATCHET_END);
-  if (claudeRatchet && canonicalPi.includes(claudeRatchet)) remaining = remaining.replace(claudeRatchet, "");
+  if (claudeRatchet && canonicalContent.includes(claudeRatchet)) remaining = remaining.replace(claudeRatchet, "");
   remaining = remaining.trim();
   remaining = remaining.replace(/^@AGENTS\.md\s*/m, "").trim();
   writeFileAtomic(claudeFile, `@AGENTS.md${remaining ? `\n\n${remaining}` : ""}\n`);
 
-  return { backup: link.backup };
+  return { backups };
 }
 
-function setup(options) {
-  const home = path.resolve(options.home);
+function setup(options = {}, packageRoot = path.resolve(__dirname, "..")) {
+  const home = path.resolve(options.home ?? os.homedir());
+  const pi = options.pi === undefined ? piBinary() : options.pi;
   const settingsFile = path.join(home, ".pi", "agent", "settings.json");
-  const actions = packageActions(readJson(settingsFile, {}));
+  const actions = pi ? packageActions(readJson(settingsFile, {})) : [];
 
   if (options.dryRun) {
     console.log("Kirin setup dry run:");
-    for (const item of actions) console.log(`- pi ${item.action} ${item.source}`);
-    console.log(`- configure ${settingsFile}`);
-    console.log(`- link core skills through ${path.join(home, ".agents", "skills")}`);
-    console.log(`- sync agents and instructions under ${home}`);
-    return { dryRun: true };
+    console.log(`- install shared skills under ${path.join(home, ".agents", "skills")}`);
+    console.log(`- link Claude skills and instructions under ${path.join(home, ".claude")}`);
+    if (pi) for (const item of actions) console.log(`- pi ${item.action} ${item.source}`);
+    else console.log("- pi not found; skip Pi-specific configuration");
+    return { dryRun: true, pi: Boolean(pi) };
   }
 
-  ensurePackages(home, actions);
-  configurePiSettings(settingsFile);
-
-  const checkout = path.join(home, ".pi", "agent", "git", "github.com", "bryan824", "kirin-pi");
-  if (!fs.existsSync(checkout)) throw new Error(`Kirin checkout missing after Pi install: ${checkout}`);
-
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
-  const skills = syncSharedSkills(checkout, home, runId);
-  const agents = syncAgents(
-    path.join(checkout, "harness", "agents"),
-    path.join(home, ".pi", "agent", "agents"),
-    path.join(home, ".pi", "agent", "kirin-backups", runId, "agents"),
-  );
-  if (agents.result.errors.length) throw new Error(formatSyncReport(agents.result));
+  const skills = syncSharedSkills(packageRoot, home, runId);
+  const instructions = installInstructions(home, runId, Boolean(pi));
+  const backups = [...skills.backups, ...instructions.backups];
+  let agents;
 
-  mergeSubagentSettings(path.join(home, ".pi", "agent", "subagents.json"));
-  const instructions = installInstructions(home, runId);
-  const backups = [...skills.backups, ...agents.backups, instructions.backup].filter(Boolean);
+  if (pi) {
+    ensurePackages(home, actions, pi);
+
+    const synced = syncAgents(
+      path.join(packageRoot, "harness", "agents"),
+      path.join(home, ".pi", "agent", "agents"),
+      path.join(home, ".pi", "agent", "kirin-backups", runId, "agents"),
+    );
+    if (synced.result.errors.length) throw new Error(formatSyncReport(synced.result));
+    agents = synced.result;
+    backups.push(...synced.backups);
+    mergeSubagentSettings(path.join(home, ".pi", "agent", "subagents.json"));
+  }
 
   console.log("\nKirin setup complete.");
-  console.log(`- ${skills.count} shared core skills linked`);
-  console.log(`- ${formatSyncReport(agents.result)}`);
-  console.log("- Pi and Claude instructions share one AGENTS.md");
-  if (backups.length) console.log(`- ${backups.length} replaced item(s) backed up under ~/.agents, ~/.claude, or ~/.pi/agent`);
-  console.log("\nRestart Pi and Claude Code. Rerun this same command whenever you want to update.");
-  return { dryRun: false, skills, agents: agents.result, backups };
+  console.log(`- ${skills.count} shared core skills installed for all agents`);
+  console.log("- Claude imports the shared AGENTS.md");
+  if (pi) console.log(`- ${formatSyncReport(agents)}`);
+  else console.log("- Pi not found in PATH; Pi-specific configuration skipped");
+  if (backups.length) console.log(`- ${backups.length} replaced item(s) backed up under your home directory`);
+  console.log("\nRestart active agents. Rerun this same command whenever you want to update.");
+  return { dryRun: false, skills, agents, pi: Boolean(pi), backups };
 }
 
 function run(argv = process.argv.slice(2)) {
@@ -405,12 +432,14 @@ module.exports = {
   START,
   SUBAGENT_DEFAULTS,
   WORKFLOW,
-  configurePiSettings,
+  findExecutable,
   installBlock,
   installInstructions,
+  installSkillSnapshot,
   optInSkillNames,
   packageActions,
   parse,
+  piBinary,
   removeBlock,
   run,
   setup,
