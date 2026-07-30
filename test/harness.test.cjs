@@ -53,6 +53,12 @@ test("upstream repository references stay in the ledger except explicit Herdr sy
   }
 });
 
+test("README uses the cache-safe one-command installer", () => {
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  assert.match(readme, /bunx 'github:bryan824\/kirin-pi#main' setup/);
+  assert.doesNotMatch(readme, /bootstrap workflow/);
+});
+
 test("required legal and current-truth docs exist", () => {
   for (const rel of ["README.md", "LICENSE", "LICENSE-APACHE", "docs/memory.md", "docs/verification.md", "docs/UPSTREAM_LEDGER.md"]) {
     assert.equal(fs.existsSync(path.join(root, rel)), true, rel);

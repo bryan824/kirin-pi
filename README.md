@@ -97,10 +97,10 @@ Built-in `general-purpose` and `Plan` remain available. Global subagent settings
 
 ## Install or update
 
-Requires Pi and Bun. Run one command:
+Requires Pi and Bun. Run one command (the explicit branch avoids stale Bun Git caches):
 
 ```bash
-bunx github:bryan824/kirin-pi setup
+bunx 'github:bryan824/kirin-pi#main' setup
 ```
 
 It idempotently:
