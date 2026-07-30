@@ -100,9 +100,11 @@ Built-in `general-purpose` and `Plan` remain available. Global subagent settings
 Requires Bun. Scope is always global; there are no subcommands or flags. Same name either way — `bunx` fetches, `bun` uses the checkout you are standing in:
 
 ```bash
-bunx 'github:bryan824/kirin-pi#main'   # any machine, from GitHub
+rm -rf "${TMPDIR:-/tmp}"/bunx-*-kirin-pi@* && bunx 'github:bryan824/kirin-pi#main'
 bun run kirin-pi                       # inside a checkout, from the working tree
 ```
+
+The `rm -rf` is required, not hygiene. `bunx` pins the commit it resolved for `#main` under `$TMPDIR` and reuses it forever; neither `--force` nor `--no-cache` re-checks the branch. Without clearing it you silently reinstall whatever commit was current the first time you ran it. A checkout has no such problem, so `bun run kirin-pi` needs no prefix.
 
 It idempotently:
 
