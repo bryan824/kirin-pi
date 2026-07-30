@@ -1,0 +1,52 @@
+{
+  "name": "kirin-pi",
+  "version": "0.1.0",
+  "packageManager": "bun@1.3.14",
+  "description": "Bryan's compact coding-agent harness and reusable skill pack for Pi and Claude Code.",
+  "license": "MIT AND Apache-2.0",
+  "author": {
+    "name": "Bryan Tu"
+  },
+  "repository": "github:bryan824/kirin-pi",
+  "bin": {
+    "kirin-pi": "./harness/bootstrap.cjs"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-skill",
+    "pi-extension",
+    "agent-skills",
+    "coding-agent",
+    "project-memory"
+  ],
+  "pi": {
+    "extensions": [
+      "./harness/extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "files": [
+    "harness",
+    "skills",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "LICENSE-APACHE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "kirin-pi": "bun harness/bootstrap.cjs",
+    "test": "bun test test/*.test.cjs test/*.test.ts",
+    "memory:check": "bun skills/maintenance/project-memory/scripts/project-memory.cjs check",
+    "memory:init": "bun skills/maintenance/project-memory/scripts/project-memory.cjs init",
+    "hooks:install": "bun harness/hooks/install.cjs",
+    "pack:dry": "bun pm pack --dry-run"
+  }
+}

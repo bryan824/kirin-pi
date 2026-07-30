@@ -1,0 +1,18 @@
+---
+name: parallel-work
+description: "When ready work splits into file-disjoint units — assign bounded packets to model tiers, make blocked workers escalate, and integrate only independently reviewed results."
+---
+
+# Parallel Work
+
+Parallelism is a modifier, not a lifecycle stage. Stay single-track unless ready units are genuinely independent.
+
+- Estimate each unit's writable files before spawning. Shared schema, API, config, or files force serialization.
+- Keep judgment with the parent. Use cheap models for bounded mechanical work; use strong models for decomposition, risky review, and arbitration. Commands answer what commands can prove.
+- Give each worker a packet: outcome, why, relevant files, writable files, forbidden files, constraints, one verification command, and escalation conditions. Do not send the whole transcript.
+- Workers run `implement`, touch only owned files, and stop on ambiguity, overlap, a forbidden-file need, or repeated failure.
+- Use the `worker` preset for worktree-isolated edits and `reviewer` for independent read-only review. Caller chooses foreground/background; do not bake scheduling into the packet.
+- A blocked worker is not re-run unchanged. Change the packet, model tier, or decomposition.
+- Review each unit before parent integration. Workers never merge or push.
+
+Deliver: per-unit files, verification, risks, blockers, review verdict, and parent integration decision.

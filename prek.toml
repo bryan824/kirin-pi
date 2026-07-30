@@ -1,0 +1,14 @@
+# Kirin pre-commit verification. Wire once with `bun run hooks:install`.
+default_install_hook_types = ["pre-commit"]
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "kirin-integrity"
+name = "bun run test"
+language = "system"
+entry = "bun run test"
+pass_filenames = false
+always_run = true
+stages = ["pre-commit"]
