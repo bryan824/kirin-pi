@@ -8,7 +8,6 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const script = path.join(root, "harness", "setup.cjs");
 const {
-  KIRIN_BRANCH,
   KIRIN_SOURCE,
   START,
   SUBAGENT_DEFAULTS,
@@ -17,7 +16,6 @@ const {
   installInstructions,
   packageActions,
   parse,
-  resolveSourceRoot,
   setup,
   syncSharedSkills,
 } = require("../harness/setup.cjs");
@@ -67,45 +65,6 @@ test("package plan installs missing packages and updates present packages", () =
   assert.deepEqual(packageActions({ packages: [] }).map((item) => item.action), ["install", "install", "install"]);
   const actions = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-web-access"] });
   assert.deepEqual(actions.map((item) => item.action), ["update", "install", "update"]);
-});
-
-test("source root is the checkout when running from one", () => {
-  assert.equal(resolveSourceRoot(root, tempDir()), root);
-});
-
-test("without a checkout the source root is cloned, then refreshed to the branch tip", () => {
-  const base = tempDir();
-  const origin = path.join(base, "origin");
-  const home = path.join(base, "home");
-  const notACheckout = path.join(base, "tarball");
-  fs.mkdirSync(notACheckout, { recursive: true });
-
-  const run = (args, cwd) => assert.equal(spawnSync("git", args, { cwd, encoding: "utf8" }).status, 0, args.join(" "));
-  const commit = (message) => run(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", message], origin);
-  const skill = path.join("skills", "workflow", "design", "SKILL.md");
-  write(path.join(origin, skill), "---\nname: design\n---\nfirst\n");
-  run(["init", "-q", "-b", KIRIN_BRANCH], origin);
-  run(["add", skill], origin);
-  commit("first");
-
-  process.env.KIRIN_REPO_URL = origin;
-  try {
-    const cloned = resolveSourceRoot(notACheckout, home);
-    assert.equal(cloned, path.join(home, ".local", "share", "kirin-pi", "repo"));
-    assert.match(fs.readFileSync(path.join(cloned, skill), "utf8"), /first/);
-
-    // A second run must land the new origin commit, never the copy already on disk.
-    write(path.join(origin, skill), "---\nname: design\n---\nsecond\n");
-    run(["add", skill], origin);
-    commit("second");
-    write(path.join(cloned, "stray.txt"), "local edit\n");
-
-    assert.equal(resolveSourceRoot(notACheckout, home), cloned);
-    assert.match(fs.readFileSync(path.join(cloned, skill), "utf8"), /second/);
-    assert.equal(fs.existsSync(path.join(cloned, "stray.txt")), false);
-  } finally {
-    delete process.env.KIRIN_REPO_URL;
-  }
 });
 
 test("shared setup links only core plus Herdr and safely backs up collisions", () => {

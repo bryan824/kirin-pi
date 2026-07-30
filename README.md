@@ -104,8 +104,6 @@ bunx 'github:bryan824/kirin-pi#main'   # any machine, from GitHub
 bun run kirin-pi                       # inside a checkout, from the working tree
 ```
 
-`bunx` pins a resolved commit under `$TMPDIR` and reuses it without re-checking the branch, so its tarball never supplies installed content. Outside a checkout, setup refreshes a Kirin-owned clone at `~/.local/share/kirin-pi/repo` to the branch tip and installs from there; inside a checkout it installs from your working tree. Skills, presets, and instructions therefore always come from current `main`, never from a cache.
-
 It idempotently:
 
 - installs workflow, maintenance, and Herdr skills under `~/.agents/skills`

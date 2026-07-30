@@ -8,7 +8,6 @@ const path = require("node:path");
 const { formatSyncReport, syncBundledAgents } = require("./agent-sync.cjs");
 
 const KIRIN_SOURCE = "git:github.com/bryan824/kirin-pi";
-const KIRIN_BRANCH = "main";
 const REQUIRED_PACKAGES = [
   KIRIN_SOURCE,
   "npm:@tintinweb/pi-subagents",
@@ -136,33 +135,6 @@ function findExecutable(name, searchPath = process.env.PATH ?? "") {
 
 function piBinary() {
   return process.env.PI_BIN ? findExecutable(process.env.PI_BIN) : findExecutable("pi");
-}
-
-function git(args, cwd) {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
-  if (result.error) throw new Error(`Cannot run git: ${result.error.message}`);
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${(result.stderr ?? "").trim()}`);
-  return result.stdout.trim();
-}
-
-// `bunx` pins a resolved commit under $TMPDIR and reuses it without re-resolving the
-// branch, so its tarball is never the source of installed content. Running from a
-// checkout installs that checkout; anything else refreshes a Kirin-owned clone first.
-function resolveSourceRoot(packageRoot, home) {
-  if (fs.existsSync(path.join(packageRoot, ".git"))) return packageRoot;
-
-  const repo = path.join(home, ".local", "share", "kirin-pi", "repo");
-  const url = process.env.KIRIN_REPO_URL || `https://${KIRIN_SOURCE.replace(/^git:/, "")}.git`;
-  if (fs.existsSync(path.join(repo, ".git"))) {
-    git(["fetch", "--depth", "1", "origin", KIRIN_BRANCH], repo);
-    git(["reset", "--hard", "FETCH_HEAD"], repo);
-    git(["clean", "-fd"], repo);
-  } else {
-    fs.rmSync(repo, { recursive: true, force: true });
-    fs.mkdirSync(path.dirname(repo), { recursive: true });
-    git(["clone", "--depth", "1", "--branch", KIRIN_BRANCH, url, repo]);
-  }
-  return repo;
 }
 
 function ensurePackages(home, actions, pi) {
@@ -405,9 +377,8 @@ function setup(options = {}, packageRoot = path.resolve(__dirname, "..")) {
     return { dryRun: true, pi: Boolean(pi) };
   }
 
-  const sourceRoot = resolveSourceRoot(packageRoot, home);
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
-  const skills = syncSharedSkills(sourceRoot, home, runId);
+  const skills = syncSharedSkills(packageRoot, home, runId);
   const instructions = installInstructions(home, runId, Boolean(pi));
   const backups = [...skills.backups, ...instructions.backups];
   let agents;
@@ -416,7 +387,7 @@ function setup(options = {}, packageRoot = path.resolve(__dirname, "..")) {
     ensurePackages(home, actions, pi);
 
     const synced = syncAgents(
-      path.join(sourceRoot, "harness", "agents"),
+      path.join(packageRoot, "harness", "agents"),
       path.join(home, ".pi", "agent", "agents"),
       path.join(home, ".pi", "agent", "kirin-backups", runId, "agents"),
     );
@@ -457,7 +428,6 @@ if (require.main === module) {
 
 module.exports = {
   END,
-  KIRIN_BRANCH,
   KIRIN_SOURCE,
   START,
   SUBAGENT_DEFAULTS,
@@ -471,7 +441,6 @@ module.exports = {
   parse,
   piBinary,
   removeBlock,
-  resolveSourceRoot,
   run,
   setup,
   sharedSkillSources,
