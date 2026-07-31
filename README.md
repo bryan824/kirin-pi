@@ -108,8 +108,7 @@ The `rm -rf` is required, not hygiene. `bunx` pins the commit it resolved for `#
 
 It idempotently:
 
-- installs workflow, maintenance, and Herdr skills under `~/.agents/skills`
-- links the same skills under `~/.claude/skills`
+- copies workflow, maintenance, and Herdr skills into `~/.agents/skills` and `~/.claude/skills`, each marked `.kirin-managed` so a rerun replaces or prunes only its own and leaves your skills alone
 - owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
 - when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
 
