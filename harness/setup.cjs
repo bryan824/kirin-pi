@@ -57,8 +57,10 @@ const WORKFLOW = [
 
 function usage() {
   return `Usage:
-  bunx 'github:bryan824/kirin-pi#main'   any machine, from GitHub
-  bun run kirin-pi                       inside a checkout, from the working tree
+  bunx "github:bryan824/kirin-pi#<commit>"   any machine, from GitHub
+  bun run kirin-pi                           inside a checkout, from the working tree
+
+Pin a commit, not a branch: bunx resolves each source string once and caches it.
 
 Installs or updates the global Kirin harness:
 - shared workflow, maintenance, and Herdr skills for all agents

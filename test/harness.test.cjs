@@ -54,10 +54,14 @@ test("upstream repository references stay in the ledger except explicit Herdr sy
 
 test("README documents the remote and checkout install sources", () => {
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
-  assert.match(readme, /bunx 'github:bryan824\/kirin-pi#main'/);
+  // The remote form must pin a resolved commit: bunx resolves a source string once,
+  // so a branch ref would keep serving whatever commit it first saw.
+  assert.match(readme, /bunx "github:bryan824\/kirin-pi#\$\(git ls-remote /);
+  assert.doesNotMatch(readme, /bunx 'github:bryan824\/kirin-pi#main'/);
+  assert.doesNotMatch(readme, /rm -rf .*bunx-/);
   assert.match(readme, /bun run kirin-pi\b/);
   assert.doesNotMatch(readme, /bootstrap workflow/);
-  // `bun kirin-pi` is the package script; no link step or node_modules required.
+  // `bun run kirin-pi` is the package script; no link step or node_modules required.
   assert.equal(packageJson.scripts["kirin-pi"], "bun harness/setup.cjs");
   assert.equal(packageJson.scripts.link, undefined);
 });
