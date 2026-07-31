@@ -188,8 +188,14 @@ Rules for Pi tool calls:
   return sections.join("\n\n---\n\n");
 }
 
-function parseToolCalls(text: string): ToolCallSpec[] {
-  const tagged = [...text.matchAll(/<pi_tool_call>([\s\S]*?)<\/pi_tool_call>/g)];
+export function parseToolCalls(text: string): ToolCallSpec[] {
+  // Some models close the block with their own native tool-call token instead of
+  // the requested closer (DeepSeek emits `</｜｜DSML｜｜_tool_call>`), which used to
+  // drop the whole call and end the turn as plain text. Accept any `*_tool_call>`
+  // closer, or the end of the reply.
+  const tagged = [
+    ...text.matchAll(/<pi_tool_call>([\s\S]*?)(?:<\/[^\s>]*_tool_call>|$)/g),
+  ];
   if (tagged.length > 0) {
     return tagged.flatMap((match) => parseToolCallJson(match[1] ?? ""));
   }

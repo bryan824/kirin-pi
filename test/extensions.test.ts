@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, mock, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -30,6 +30,24 @@ test("extensions use current Pi lifecycle seams", () => {
   expect(readFileSync(path.join(extensions, "guardrails.ts"), "utf8")).toContain('pi.on("tool_call"');
   expect(readFileSync(path.join(extensions, "opencode-cli.ts"), "utf8")).toContain("refreshModels");
   expect(readFileSync(path.join(extensions, "session-breakdown.ts"), "utf8")).toContain("SessionManager.listAll");
+});
+
+test("OpenCode bridge parses tool calls despite native closing tokens", async () => {
+  mock.module("@earendil-works/pi-ai", () => ({
+    calculateCost: () => undefined,
+    createAssistantMessageEventStream: () => undefined,
+  }));
+  const { parseToolCalls } = await import(path.join(extensions, "opencode-cli.ts"));
+  const body = '{"name":"bash","arguments":{"command":"ls"}}';
+  const names = (text: string) => parseToolCalls(text).map((call) => call.name);
+
+  expect(names(`<pi_tool_call>${body}</pi_tool_call>`)).toEqual(["bash"]);
+  expect(names(`<pi_tool_call>${body}</｜｜DSML｜｜_tool_call>`)).toEqual(["bash"]);
+  expect(names(`sure, checking\n<pi_tool_call>${body}</pi_tool_call>`)).toEqual(["bash"]);
+  expect(
+    names(`<pi_tool_call>${body}</pi_tool_call>\n<pi_tool_call>${body}</pi_tool_call>`),
+  ).toEqual(["bash", "bash"]);
+  expect(names('```json\n{"name":"bash","arguments":{}}\n```')).toEqual(["bash"]);
 });
 
 test("Herdr keeps official state support intact and layers its tool on top", () => {
