@@ -50,6 +50,49 @@ test("OpenCode bridge parses tool calls despite native closing tokens", async ()
   expect(names('```json\n{"name":"bash","arguments":{}}\n```')).toEqual(["bash"]);
 });
 
+test("OpenCode bridge repairs unescaped quotes in tool-call JSON", async () => {
+  mock.module("@earendil-works/pi-ai", () => ({
+    calculateCost: () => undefined,
+    createAssistantMessageEventStream: () => undefined,
+  }));
+  const { parseToolCalls } = await import(path.join(extensions, "opencode-cli.ts"));
+
+  const broken = `<pi_tool_call>{
+  "name": "bash",
+  "arguments": {
+    "command": "grep -rn "Agent types:\\\\|Explore" /tmp/docs | head -30"
+  }
+}</｜｜DSML｜｜_tool_call>`;
+  expect(parseToolCalls(broken)).toEqual([
+    {
+      name: "bash",
+      arguments: { command: 'grep -rn "Agent types:\\|Explore" /tmp/docs | head -30' },
+    },
+  ]);
+
+  // Valid JSON must survive the repair path untouched.
+  expect(
+    parseToolCalls('<pi_tool_call>{"name":"bash","arguments":{"command":"echo \\"hi\\", ok"}}</pi_tool_call>'),
+  ).toEqual([{ name: "bash", arguments: { command: 'echo "hi", ok' } }]);
+
+  // Still no calls when there is no tool-call JSON at all.
+  expect(parseToolCalls("plain answer, no tool needed")).toEqual([]);
+});
+
+test("OpenCode bridge rejects replies Pi cannot act on", async () => {
+  mock.module("@earendil-works/pi-ai", () => ({
+    calculateCost: () => undefined,
+    createAssistantMessageEventStream: () => undefined,
+  }));
+  const { rejectionReason } = await import(path.join(extensions, "opencode-cli.ts"));
+  const call = { name: "bash", arguments: {} };
+
+  expect(rejectionReason("all done", [])).toBeUndefined();
+  expect(rejectionReason("<pi_tool_call>{...}", [call])).toBeUndefined();
+  expect(rejectionReason("<pi_tool_call>{bad json}", [])).toContain("not valid JSON");
+  expect(rejectionReason("fine", [call], "read")).toContain("read");
+});
+
 test("Herdr keeps official state support intact and layers its tool on top", () => {
   const state = readFileSync(path.join(extensions, "herdr", "agent-state.ts"), "utf8");
   const integration = readFileSync(path.join(extensions, "herdr", "index.ts"), "utf8");

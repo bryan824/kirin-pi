@@ -36,6 +36,8 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
 const DEFAULT_MAX_TOKENS = 16_384;
 const DISCOVERY_TIMEOUT_MS = 8_000;
 const STDERR_LIMIT = 20_000;
+const MAX_REPAIR_RETRIES = 1;
+const RAW_REPLY_LIMIT = 2_000;
 const OVERFLOW_PATTERN =
   /(context(?: length| window)?|prompt is too long|too many tokens|max(?:imum)?[^\n]*context)/i;
 
@@ -166,6 +168,7 @@ If you need Pi to run a tool, output only one or more tool-call blocks and no pr
 Rules for Pi tool calls:
 - Use only tools listed in the \"Available Pi tools\" section.
 - The JSON inside <pi_tool_call> must be valid JSON with \"name\" and \"arguments\" fields.
+- Escape every double quote inside a JSON string value as \\\", or prefer single quotes in shell commands.
 - Do not wrap tool calls in Markdown fences.
 - If you can answer without a tool, answer normally in plain text.
 - After Pi returns tool results, continue from the transcript and either answer or request another Pi tool call.`);
@@ -188,6 +191,48 @@ Rules for Pi tool calls:
   return sections.join("\n\n---\n\n");
 }
 
+/**
+ * Why a reply cannot be handed to Pi as-is, or undefined when it can. A reply
+ * that carries tool-call markers but parses to nothing must never reach the
+ * user as prose: the markers would be echoed back into the next transcript and
+ * the model would keep repeating them instead of running a tool.
+ */
+export function rejectionReason(
+  text: string,
+  toolCalls: ToolCallSpec[],
+  nativeTool?: string,
+): string | undefined {
+  if (nativeTool) {
+    return `OpenCode tools are disabled in this bridge, but you called \`${nativeTool}\`.`;
+  }
+  if (toolCalls.length === 0 && text.includes("<pi_tool_call>")) {
+    return "Your <pi_tool_call> block was not valid JSON, so Pi could not run any tool.";
+  }
+  return undefined;
+}
+
+function buildRetryPrompt(
+  basePrompt: string,
+  rejection: string,
+  reply: string,
+): string {
+  return [
+    basePrompt,
+    `# Retry: Pi rejected your previous reply
+
+${rejection}
+
+Your rejected reply was:
+
+${reply.slice(0, RAW_REPLY_LIMIT)}
+
+Produce the corrected assistant message now. To request a Pi tool, output only
+<pi_tool_call>{"name":"...","arguments":{...}}</pi_tool_call> blocks whose JSON
+parses: escape every double quote inside a string as \\", or use single quotes in
+shell commands. Otherwise answer in plain text with no tool-call markers.`,
+  ].join("\n\n---\n\n");
+}
+
 export function parseToolCalls(text: string): ToolCallSpec[] {
   // Some models close the block with their own native tool-call token instead of
   // the requested closer (DeepSeek emits `</｜｜DSML｜｜_tool_call>`), which used to
@@ -207,12 +252,51 @@ export function parseToolCalls(text: string): ToolCallSpec[] {
   return parseToolCallJson(stripped);
 }
 
+/**
+ * Escape double quotes that a model left unescaped inside a JSON string value
+ * (shell commands like `grep -rn "x" .` are the common source). A quote is a
+ * real terminator only when the next non-space character closes the value.
+ */
+export function repairUnescapedQuotes(raw: string): string {
+  let out = "";
+  let inString = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index]!;
+    if (!inString) {
+      out += char;
+      if (char === '"') inString = true;
+      continue;
+    }
+    if (char === "\\") {
+      out += char + (raw[index + 1] ?? "");
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      const next = raw.slice(index + 1).match(/^\s*(\S)/)?.[1];
+      if (next === undefined || ",:}]".includes(next)) {
+        inString = false;
+        out += char;
+      } else {
+        out += '\\"';
+      }
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
 function parseToolCallJson(raw: string): ToolCallSpec[] {
   let value: unknown;
   try {
     value = JSON.parse(raw.trim());
   } catch {
-    return [];
+    try {
+      value = JSON.parse(repairUnescapedQuotes(raw.trim()));
+    } catch {
+      return [];
+    }
   }
 
   const candidates = Array.isArray(value)
@@ -436,15 +520,16 @@ function streamOpenCode(
     };
 
     let tempDir: string | undefined;
-    let accumulatedText = "";
     let stderr = "";
-    let stdoutRemainder = "";
-    let nativeToolUse: string | undefined;
     const prompt = buildPrompt(context);
 
-    try {
-      stream.push({ type: "start", partial: output });
-      tempDir = await createTempAgentDir();
+    const runOnce = async (
+      promptText: string,
+      dir: string,
+    ): Promise<{ text: string; nativeTool?: string }> => {
+      let text = "";
+      let remainder = "";
+      let nativeTool: string | undefined;
 
       const child = spawn(
         opencodeBin(),
@@ -458,7 +543,7 @@ function streamOpenCode(
           "--format",
           "json",
           "--dir",
-          tempDir,
+          dir,
         ],
         {
           stdio: ["pipe", "pipe", "pipe"],
@@ -469,7 +554,7 @@ function streamOpenCode(
       const abort = () => child.kill("SIGTERM");
       options?.signal?.addEventListener("abort", abort, { once: true });
 
-      child.stdin?.end(prompt);
+      child.stdin?.end(promptText);
       child.stdout?.setEncoding("utf8");
       child.stderr?.setEncoding("utf8");
 
@@ -485,30 +570,31 @@ function streamOpenCode(
         }
 
         if (event.type === "text" && typeof event.part?.text === "string") {
-          accumulatedText += event.part.text;
+          text += event.part.text;
           return;
         }
 
         if (event.type === "step_finish" && event.part?.tokens) {
           const tokens = event.part.tokens;
-          output.usage.input = Number(tokens.input ?? 0);
-          output.usage.output =
+          // Steps and retries both add to the same turn, so accumulate.
+          const input = Number(tokens.input ?? 0);
+          const outputTokens =
             Number(tokens.output ?? 0) + Number(tokens.reasoning ?? 0);
-          output.usage.cacheRead = Number(tokens.cache?.read ?? 0);
-          output.usage.cacheWrite = Number(tokens.cache?.write ?? 0);
-          output.usage.totalTokens = Number(
-            tokens.total ??
-              output.usage.input +
-                output.usage.output +
-                output.usage.cacheRead +
-                output.usage.cacheWrite,
+          const cacheRead = Number(tokens.cache?.read ?? 0);
+          const cacheWrite = Number(tokens.cache?.write ?? 0);
+          output.usage.input += input;
+          output.usage.output += outputTokens;
+          output.usage.cacheRead += cacheRead;
+          output.usage.cacheWrite += cacheWrite;
+          output.usage.totalTokens += Number(
+            tokens.total ?? input + outputTokens + cacheRead + cacheWrite,
           );
           calculateCost(model, output.usage);
           return;
         }
 
         if (event.type === "tool_use") {
-          nativeToolUse = event.part?.tool ? String(event.part.tool) : "unknown";
+          nativeTool = event.part?.tool ? String(event.part.tool) : "unknown";
           return;
         }
 
@@ -518,9 +604,9 @@ function streamOpenCode(
       };
 
       child.stdout?.on("data", (chunk: string) => {
-        stdoutRemainder += chunk;
-        const lines = stdoutRemainder.split(/\r?\n/);
-        stdoutRemainder = lines.pop() ?? "";
+        remainder += chunk;
+        const lines = remainder.split(/\r?\n/);
+        remainder = lines.pop() ?? "";
         for (const line of lines) handleLine(line);
       });
 
@@ -534,8 +620,8 @@ function streamOpenCode(
       });
       options?.signal?.removeEventListener("abort", abort);
 
-      if (stdoutRemainder.trim()) {
-        handleLine(stdoutRemainder);
+      if (remainder.trim()) {
+        handleLine(remainder);
       }
 
       if (options?.signal?.aborted) {
@@ -544,14 +630,34 @@ function streamOpenCode(
       if (code !== 0) {
         throw new Error(stderr.trim() || `opencode exited with code ${code}`);
       }
-      if (nativeToolUse) {
-        throw new Error(
-          `OpenCode attempted to use its own tool (${nativeToolUse}). Use Pi tool-call markers instead.`,
-        );
+
+      return { text, nativeTool };
+    };
+
+    try {
+      stream.push({ type: "start", partial: output });
+      tempDir = await createTempAgentDir();
+
+      let attemptPrompt = prompt;
+      let accumulatedText = "";
+      let toolCalls: ToolCallSpec[] = [];
+
+      for (let attempt = 0; ; attempt += 1) {
+        const result = await runOnce(attemptPrompt, tempDir);
+        accumulatedText = result.text;
+        toolCalls = result.nativeTool ? [] : parseToolCalls(accumulatedText);
+
+        const rejection = rejectionReason(accumulatedText, toolCalls, result.nativeTool);
+        if (!rejection) break;
+        if (attempt >= MAX_REPAIR_RETRIES) {
+          throw new Error(
+            `${rejection}\n\nRaw reply:\n${accumulatedText.slice(0, RAW_REPLY_LIMIT)}`,
+          );
+        }
+        attemptPrompt = buildRetryPrompt(prompt, rejection, accumulatedText);
       }
 
-      const toolCalls = parseToolCalls(accumulatedText);
-      fillEstimatedUsage(model, output, prompt, accumulatedText);
+      fillEstimatedUsage(model, output, attemptPrompt, accumulatedText);
 
       if (toolCalls.length > 0) {
         output.stopReason = "toolUse";
