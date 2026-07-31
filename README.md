@@ -108,11 +108,11 @@ The `rm -rf` is required, not hygiene. `bunx` pins the commit it resolved for `#
 
 It idempotently:
 
-- copies workflow, maintenance, and Herdr skills into `~/.agents/skills` and `~/.claude/skills`, each marked `.kirin-managed` so a rerun replaces or prunes only its own and leaves your skills alone
+- rebuilds `~/.agents/skills` and `~/.claude/skills` from scratch, so both hold exactly the workflow, maintenance, and Herdr skills this repository ships
 - owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
 - when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
 
-Existing colliding skill, agent, or instruction paths are backed up before replacement. Restart active agents afterward.
+Both skill roots are Kirin output and are replaced wholesale on every run: nothing placed there by hand survives, so project-specific skills belong under `.agents/skills/` or `.pi/skills/` in the project itself. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
 
 Rerun the same command whenever you want to update. Domain skills such as Rust, Python tooling, teaching, and UI design remain project opt-in under `.agents/skills/` or `.pi/skills/`.
 

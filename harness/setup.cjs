@@ -20,9 +20,6 @@ const SUBAGENT_DEFAULTS = {
   toolDescriptionMode: "compact",
   outputTranscript: false,
 };
-const MANAGED_MARKER = ".kirin-managed";
-const LEGACY_MARKER = ".managed-by-kirin";
-const MANAGED_NOTE = "Installed by `kirin-pi setup`; edit the source skill in the repository instead.\n";
 const START = "<!-- kirin-workflow:start -->";
 const END = "<!-- kirin-workflow:end -->";
 const RATCHET_START = "<!-- kirin-ratchet:start -->";
@@ -235,100 +232,23 @@ function sharedSkillSources(packageRoot) {
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function optInSkillNames(packageRoot) {
-  const domain = path.join(packageRoot, "skills", "domain");
-  if (!fs.existsSync(domain)) return [];
-  return fs.readdirSync(domain, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== "herdr")
-    .filter((entry) => fs.existsSync(path.join(domain, entry.name, "SKILL.md")))
-    .map((entry) => entry.name)
-    .sort();
-}
-
-// A skill Kirin installed carries this marker, so a rerun can tell its own copies
-// apart from skills you wrote and may replace or prune only the former.
-function kirinOwned(target, ownedRoots) {
-  const current = lstat(target);
-  if (!current) return false;
-  if (current.isSymbolicLink()) {
-    try {
-      // Resolve both sides: /var and /private/var name the same directory on macOS.
-      const resolved = fs.realpathSync(target);
-      return ownedRoots.some((root) => {
-        const real = fs.existsSync(root) ? fs.realpathSync(root) : root;
-        return resolved.startsWith(real);
-      });
-    } catch {
-      return true; // dangling link from an earlier layout
-    }
-  }
-  return fs.existsSync(path.join(target, MANAGED_MARKER));
-}
-
-function installSkillTree(sourceSkills, targetDir, backupDir, ownedRoots) {
-  const backups = [];
-  const shipped = new Set(sourceSkills.map((skill) => skill.name));
-
-  if (fs.existsSync(targetDir)) {
-    for (const entry of fs.readdirSync(targetDir)) {
-      const target = path.join(targetDir, entry);
-      if (!shipped.has(entry) && kirinOwned(target, ownedRoots)) {
-        fs.rmSync(target, { recursive: true, force: true });
-      }
-    }
-  }
-
-  fs.mkdirSync(targetDir, { recursive: true });
-  for (const skill of sourceSkills) {
-    const target = path.join(targetDir, skill.name);
-    if (lstat(target)) {
-      if (kirinOwned(target, ownedRoots)) fs.rmSync(target, { recursive: true, force: true });
-      else backups.push(backupExisting(target, backupDir));
-    }
-    fs.cpSync(skill.source, target, { recursive: true });
-    fs.writeFileSync(path.join(target, MANAGED_MARKER), MANAGED_NOTE, "utf8");
-  }
-  return backups;
-}
-
-function syncSharedSkills(packageRoot, home, runId) {
-  const sharedDir = path.join(home, ".agents", "skills");
-  const claudeDir = path.join(home, ".claude", "skills");
-  const legacyRoot = path.join(home, ".local", "share", "kirin-pi", "skills");
-  // Earlier layouts staged skills then linked both roots at them, and linked
-  // Claude at the shared root, so a link into either is Kirin's own.
-  const ownedRoots = [legacyRoot, sharedDir];
+// Both skill roots are Kirin output, rebuilt from scratch every run. Nothing there
+// is tracked or preserved, so hand-placed skills belong in a project instead.
+function syncSharedSkills(packageRoot, home = os.homedir()) {
   const sourceSkills = sharedSkillSources(packageRoot);
-  const backups = [];
 
-  for (const name of optInSkillNames(packageRoot)) {
-    for (const [target, backup] of [
-      [path.join(sharedDir, name), path.join(home, ".agents", "kirin-backups", runId, "opt-in-skills")],
-      [path.join(claudeDir, name), path.join(home, ".claude", "kirin-backups", runId, "opt-in-skills")],
-    ]) {
-      if (lstat(target)) backups.push(backupExisting(target, backup));
-    }
-  }
-
-  for (const [dir, backupDir] of [
-    [sharedDir, path.join(home, ".agents", "kirin-backups", runId, "skills")],
-    [claudeDir, path.join(home, ".claude", "kirin-backups", runId, "skills")],
+  for (const dir of [
+    path.join(home, ".agents", "skills"),
+    path.join(home, ".claude", "skills"),
   ]) {
-    backups.push(...installSkillTree(sourceSkills, dir, backupDir, ownedRoots));
-  }
-
-  // Skills now live directly in both roots, so drop the staging copy an older
-  // layout created. Only ours: anything unmarked there belongs to someone else.
-  if (fs.existsSync(path.join(legacyRoot, LEGACY_MARKER))) {
-    fs.rmSync(legacyRoot, { recursive: true, force: true });
-    try {
-      fs.rmdirSync(path.dirname(legacyRoot));
-    } catch {
-      // parent holds other content; leave it
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    for (const skill of sourceSkills) {
+      fs.cpSync(skill.source, path.join(dir, skill.name), { recursive: true });
     }
   }
 
-  return { count: sourceSkills.length, backups };
+  return { count: sourceSkills.length };
 }
 
 function syncAgents(sourceDir, targetDir, backupDir) {
@@ -407,9 +327,9 @@ function setup(options = {}, packageRoot = path.resolve(__dirname, "..")) {
   }
 
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
-  const skills = syncSharedSkills(packageRoot, home, runId);
+  const skills = syncSharedSkills(packageRoot);
   const instructions = installInstructions(home, runId, Boolean(pi));
-  const backups = [...skills.backups, ...instructions.backups];
+  const backups = [...instructions.backups];
   let agents;
 
   if (pi) {
@@ -458,15 +378,12 @@ if (require.main === module) {
 module.exports = {
   END,
   KIRIN_SOURCE,
-  LEGACY_MARKER,
   START,
   SUBAGENT_DEFAULTS,
   WORKFLOW,
   findExecutable,
   installBlock,
   installInstructions,
-  installSkillTree,
-  optInSkillNames,
   packageActions,
   parse,
   piBinary,

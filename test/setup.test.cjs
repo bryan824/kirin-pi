@@ -9,7 +9,6 @@ const root = path.resolve(__dirname, "..");
 const script = path.join(root, "harness", "setup.cjs");
 const {
   KIRIN_SOURCE,
-  LEGACY_MARKER,
   START,
   SUBAGENT_DEFAULTS,
   WORKFLOW,
@@ -68,74 +67,40 @@ test("package plan installs missing packages and updates present packages", () =
   assert.deepEqual(actions.map((item) => item.action), ["update", "install", "update"]);
 });
 
-test("shared setup links only core plus Herdr and safely backs up collisions", () => {
+test("each run rebuilds both skill roots from the harness alone", () => {
   const base = tempDir();
   const home = path.join(base, "home");
   const checkout = fixtureCheckout(base);
-  write(path.join(home, ".local", "share", "kirin-pi", "skills", "user.txt"), "unmanaged snapshot\n");
-  write(path.join(home, ".agents", "skills", "design", "user.txt"), "shared original\n");
-  write(path.join(home, ".claude", "skills", "design", "user.txt"), "claude original\n");
-  write(path.join(home, ".agents", "skills", "rust", "user.txt"), "shared opt-in\n");
-  write(path.join(home, ".claude", "skills", "rust", "user.txt"), "claude opt-in\n");
+  const roots = [path.join(home, ".agents", "skills"), path.join(home, ".claude", "skills")];
 
-  const first = syncSharedSkills(checkout, home, "run-1");
+  // Whatever was there before — an older layout's symlink, a hand-written skill,
+  // an opt-in domain skill — does not survive a rebuild.
+  const staging = path.join(home, ".local", "share", "kirin-pi", "skills");
+  write(path.join(staging, "design", "SKILL.md"), "---\nname: design\n---\nstale\n");
+  fs.mkdirSync(roots[0], { recursive: true });
+  fs.symlinkSync(path.join(staging, "design"), path.join(roots[0], "design"), "dir");
+  write(path.join(roots[1], "design", "SKILL.md"), "---\nname: design\n---\nstale\n");
+  write(path.join(roots[0], "hand-written", "SKILL.md"), "---\nname: hand-written\n---\n");
+  write(path.join(roots[1], "rust", "SKILL.md"), "---\nname: rust\n---\n");
+
+  const first = syncSharedSkills(checkout, home);
   assert.equal(first.count, 17);
-  assert.equal(first.backups.length, 4);
-  for (const dir of [path.join(home, ".agents", "skills"), path.join(home, ".claude", "skills")]) {
-    assert.deepEqual(fs.readdirSync(dir).filter((name) => !name.startsWith(".")).sort(), SHARED_SKILLS);
-    // Real directories in both roots, not links into a shared staging copy.
+  for (const dir of roots) {
+    assert.deepEqual(fs.readdirSync(dir).sort(), SHARED_SKILLS);
     assert.equal(fs.lstatSync(path.join(dir, "design")).isDirectory(), true);
-    assert.equal(fs.existsSync(path.join(dir, "design", "SKILL.md")), true);
-    assert.equal(fs.existsSync(path.join(dir, "design", ".kirin-managed")), true);
-    assert.equal(fs.existsSync(path.join(dir, "rust")), false);
+    assert.match(fs.readFileSync(path.join(dir, "design", "SKILL.md"), "utf8"), /name: design/);
+    assert.doesNotMatch(fs.readFileSync(path.join(dir, "design", "SKILL.md"), "utf8"), /stale/);
   }
-  // Unmarked content under the old staging path is not Kirin's to delete.
-  assert.equal(fs.readFileSync(path.join(home, ".local", "share", "kirin-pi", "skills", "user.txt"), "utf8"), "unmanaged snapshot\n");
-  assert.equal(fs.readFileSync(path.join(home, ".agents", "kirin-backups", "run-1", "skills", "design", "user.txt"), "utf8"), "shared original\n");
-  assert.equal(fs.readFileSync(path.join(home, ".claude", "kirin-backups", "run-1", "skills", "design", "user.txt"), "utf8"), "claude original\n");
-  assert.equal(fs.readFileSync(path.join(home, ".agents", "kirin-backups", "run-1", "opt-in-skills", "rust", "user.txt"), "utf8"), "shared opt-in\n");
-  assert.equal(fs.readFileSync(path.join(home, ".claude", "kirin-backups", "run-1", "opt-in-skills", "rust", "user.txt"), "utf8"), "claude opt-in\n");
 
+  // Dropping a skill upstream removes it; edits upstream land on the next run.
   write(path.join(checkout, "skills", "workflow", "design", "updated.txt"), "updated\n");
-  const second = syncSharedSkills(checkout, home, "run-2");
-  assert.equal(second.backups.length, 0);
-  for (const dir of [path.join(home, ".agents", "skills"), path.join(home, ".claude", "skills")]) {
+  fs.rmSync(path.join(checkout, "skills", "workflow", "survey"), { recursive: true });
+  const second = syncSharedSkills(checkout, home);
+  assert.equal(second.count, 16);
+  for (const dir of roots) {
+    assert.equal(fs.existsSync(path.join(dir, "survey")), false);
     assert.equal(fs.readFileSync(path.join(dir, "design", "updated.txt"), "utf8"), "updated\n");
   }
-});
-
-test("rerun replaces Kirin's own skills, prunes dropped ones, and spares yours", () => {
-  const base = tempDir();
-  const home = path.join(base, "home");
-  const checkout = fixtureCheckout(base);
-
-  // Previous layout: a marked staging copy with both roots linked into it.
-  const staging = path.join(home, ".local", "share", "kirin-pi", "skills");
-  write(path.join(staging, LEGACY_MARKER), "generated\n");
-  write(path.join(staging, "design", "SKILL.md"), "---\nname: design\n---\nold\n");
-  fs.mkdirSync(path.join(home, ".agents", "skills"), { recursive: true });
-  fs.mkdirSync(path.join(home, ".claude", "skills"), { recursive: true });
-  fs.symlinkSync(path.join(staging, "design"), path.join(home, ".agents", "skills", "design"), "dir");
-  // Claude linked at the shared root, not at staging: still Kirin's, even after
-  // the shared root has already been rewritten to real directories.
-  fs.symlinkSync(path.join(home, ".agents", "skills", "design"), path.join(home, ".claude", "skills", "design"), "dir");
-
-  const migrated = syncSharedSkills(checkout, home, "run-0");
-  assert.equal(migrated.backups.length, 0, "links into the old staging copy are Kirin's, not user content");
-  assert.equal(fs.existsSync(path.join(home, ".local", "share", "kirin-pi")), false);
-  assert.equal(fs.lstatSync(path.join(home, ".agents", "skills", "design")).isDirectory(), true);
-
-  syncSharedSkills(checkout, home, "run-1");
-
-  const shared = path.join(home, ".agents", "skills");
-  write(path.join(shared, "my-own", "SKILL.md"), "---\nname: my-own\n---\nmine\n");
-  fs.rmSync(path.join(checkout, "skills", "workflow", "survey"), { recursive: true });
-
-  const second = syncSharedSkills(checkout, home, "run-2");
-  assert.equal(second.count, 16);
-  assert.equal(second.backups.length, 0, "an unmanaged skill must not be touched");
-  assert.equal(fs.existsSync(path.join(shared, "survey")), false, "dropped skill is pruned");
-  assert.equal(fs.readFileSync(path.join(shared, "my-own", "SKILL.md"), "utf8"), "---\nname: my-own\n---\nmine\n");
 });
 
 test("Claude imports canonical Pi AGENTS while custom text survives", () => {
