@@ -14,11 +14,11 @@ function filesUnder(dir) {
   });
 }
 
-test("repository has four owned areas and no legacy deploy surface", () => {
-  for (const name of ["harness", "skills", "docs", "test"]) {
+test("executable integration lives at the root with no wrapper directory", () => {
+  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "agent-sync.cjs", "guard-policy.cjs", "setup.cjs"]) {
     assert.equal(fs.existsSync(path.join(root, name)), true, name);
   }
-  for (const name of ["agents", "extensions", "scripts", "intercepted-commands", "context", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
+  for (const name of ["harness", "scripts", "intercepted-commands", "context", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
     assert.equal(fs.existsSync(path.join(root, name)), false, name);
   }
   assert.equal(fs.existsSync(path.join(root, "docs", "decisions")), false);
@@ -27,9 +27,13 @@ test("repository has four owned areas and no legacy deploy surface", () => {
 test("package uses native Pi resources and a strict publication allowlist", () => {
   // No `skills` key: shared skills reach agents through ~/.agents/skills only.
   // Re-adding it makes Pi load every skill a second time from the package.
-  assert.deepEqual(packageJson.pi, { extensions: ["./harness/extensions"] });
-  assert.equal(packageJson.bin["kirin-pi"], "./harness/setup.cjs");
-  assert.deepEqual(packageJson.files, ["harness", "skills", "docs", "README.md", "LICENSE", "LICENSE-APACHE"]);
+  assert.deepEqual(packageJson.pi, { extensions: ["./extensions"] });
+  assert.equal(packageJson.bin["kirin-pi"], "./setup.cjs");
+  assert.deepEqual(packageJson.files, [
+    "agents", "extensions", "hooks", "skills", "docs",
+    "agent-sync.cjs", "guard-policy.cjs", "setup.cjs",
+    "README.md", "LICENSE", "LICENSE-APACHE",
+  ]);
   assert.equal(packageJson.dependencies, undefined);
   assert.equal(fs.existsSync(path.join(root, "bun.lock")), false);
   assert.equal(fs.existsSync(path.join(root, "bun.lockb")), false);
@@ -37,8 +41,13 @@ test("package uses native Pi resources and a strict publication allowlist", () =
 
 test("upstream repository references stay in the ledger except explicit Herdr sync links", () => {
   const candidates = [
-    ...filesUnder(path.join(root, "harness")),
+    ...filesUnder(path.join(root, "agents")),
+    ...filesUnder(path.join(root, "extensions")),
+    ...filesUnder(path.join(root, "hooks")),
     ...filesUnder(path.join(root, "skills")),
+    path.join(root, "agent-sync.cjs"),
+    path.join(root, "guard-policy.cjs"),
+    path.join(root, "setup.cjs"),
     path.join(root, "AGENTS.md"),
   ].filter((file) => /\.(?:md|ts|cjs)$/.test(file));
 
@@ -62,7 +71,7 @@ test("README documents the remote and checkout install sources", () => {
   assert.match(readme, /bun run kirin-pi\b/);
   assert.doesNotMatch(readme, /bootstrap workflow/);
   // `bun run kirin-pi` is the package script; no link step or node_modules required.
-  assert.equal(packageJson.scripts["kirin-pi"], "bun harness/setup.cjs");
+  assert.equal(packageJson.scripts["kirin-pi"], "bun setup.cjs");
   assert.equal(packageJson.scripts.link, undefined);
 });
 

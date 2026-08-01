@@ -4,7 +4,7 @@ This repository is Bryan's reusable coding-agent harness.
 
 ## Boundaries
 
-- `harness/` owns executable integration: extensions, hooks, and subagent presets.
+- Root `agents/`, `extensions/`, `hooks/`, and setup/policy files own executable integration.
 - `skills/` owns portable prompt skills.
 - `docs/` owns current durable truth and the sole upstream ledger.
 - `test/` owns repository contracts.

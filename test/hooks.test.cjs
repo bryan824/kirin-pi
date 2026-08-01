@@ -3,7 +3,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const { getBlockedGitMessage, getBlockedPythonToolMessage } = require(path.join(root, "harness", "guard-policy.cjs"));
+const { getBlockedGitMessage, getBlockedPythonToolMessage } = require(path.join(root, "guard-policy.cjs"));
 
 test("guard blocks broad staging and hook bypass", () => {
   for (const cmd of [

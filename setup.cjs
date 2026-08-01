@@ -318,7 +318,7 @@ function installInstructions(home, runId, withPi) {
   return { backups };
 }
 
-function setup(options = {}, packageRoot = path.resolve(__dirname, "..")) {
+function setup(options = {}, packageRoot = __dirname) {
   const home = path.resolve(options.home ?? os.homedir());
   const pi = options.pi === undefined ? piBinary() : options.pi;
   const settingsFile = path.join(home, ".pi", "agent", "settings.json");
@@ -343,7 +343,7 @@ function setup(options = {}, packageRoot = path.resolve(__dirname, "..")) {
     ensurePackages(home, actions, pi);
 
     const synced = syncAgents(
-      path.join(packageRoot, "harness", "agents"),
+      path.join(packageRoot, "agents"),
       path.join(home, ".pi", "agent", "agents"),
       path.join(home, ".pi", "agent", "kirin-backups", runId, "agents"),
     );

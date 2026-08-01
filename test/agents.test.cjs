@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const dir = path.join(root, "harness", "agents");
+const dir = path.join(root, "agents");
 const EXPECTED = [
   "explore.md",
   "claim-verifier.md",

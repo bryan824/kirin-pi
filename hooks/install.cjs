@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // Wire kirin-pi's prek hooks. Idempotent; `--ensure` never installs tools.
 //
-//   bun harness/hooks/install.cjs            verbose: ensure prek, then `prek install`
-//   bun harness/hooks/install.cjs --ensure   quiet auto-heal (SessionStart): no surprise installs
+//   bun hooks/install.cjs            verbose: ensure prek, then `prek install`
+//   bun hooks/install.cjs --ensure   quiet auto-heal (SessionStart): no surprise installs
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");

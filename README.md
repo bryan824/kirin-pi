@@ -4,14 +4,17 @@ Bryan's compact coding-agent harness: one Pi package, a small workflow, reusable
 
 ## Design
 
-Four boundaries:
+Executable integration stays flat because this repository is already the harness:
 
 ```text
 kirin-pi/
-├── harness/   executable integration: Pi extensions, agent presets, hooks
-├── skills/    portable prompt skills: workflow, maintenance, domain
-├── docs/      current memory/verification plus upstream provenance
-└── test/      repository contracts
+├── agents/       Pi subagent presets
+├── extensions/   Pi runtime extensions
+├── hooks/        Claude and Git hooks
+├── setup.cjs     global installer
+├── skills/       portable workflow, maintenance, and domain prompts
+├── docs/         current truth and upstream provenance
+└── test/         repository contracts
 ```
 
 Pi loads package resources natively from `package.json`. No custom deploy layer, package doctor, generated runtime tree, or legacy job loop.
@@ -66,7 +69,7 @@ bug:   debug -> verify -> commit
 
 Vault, Obsidian, and travel skills are intentionally absent. A project that needs private or domain-specific behavior owns it under `.agents/skills/` or `.pi/skills/`.
 
-## Harness
+## Runtime
 
 ### Extensions
 

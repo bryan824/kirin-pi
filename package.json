@@ -9,7 +9,7 @@
   },
   "repository": "github:bryan824/kirin-pi",
   "bin": {
-    "kirin-pi": "./harness/setup.cjs"
+    "kirin-pi": "./setup.cjs"
   },
   "keywords": [
     "pi-package",
@@ -21,13 +21,18 @@
   ],
   "pi": {
     "extensions": [
-      "./harness/extensions"
+      "./extensions"
     ]
   },
   "files": [
-    "harness",
+    "agents",
+    "extensions",
+    "hooks",
     "skills",
     "docs",
+    "agent-sync.cjs",
+    "guard-policy.cjs",
+    "setup.cjs",
     "README.md",
     "LICENSE",
     "LICENSE-APACHE"
@@ -45,11 +50,11 @@
     "typebox": { "optional": true }
   },
   "scripts": {
-    "kirin-pi": "bun harness/setup.cjs",
+    "kirin-pi": "bun setup.cjs",
     "test": "bun test test/*.test.cjs test/*.test.ts",
     "memory:check": "bun skills/maintenance/project-memory/scripts/project-memory.cjs check",
     "memory:init": "bun skills/maintenance/project-memory/scripts/project-memory.cjs init",
-    "hooks:install": "bun harness/hooks/install.cjs",
+    "hooks:install": "bun hooks/install.cjs",
     "pack:dry": "bun pm pack --dry-run"
   }
 }

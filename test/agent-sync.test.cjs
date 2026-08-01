@@ -10,7 +10,7 @@ const {
   readManifest,
   sha256,
   syncBundledAgents,
-} = require(path.join(root, "harness", "agent-sync.cjs"));
+} = require(path.join(root, "agent-sync.cjs"));
 
 function tmpDirs() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "kirin-agent-sync-"));

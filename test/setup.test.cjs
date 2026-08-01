@@ -6,7 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
-const script = path.join(root, "harness", "setup.cjs");
+const script = path.join(root, "setup.cjs");
 const {
   KIRIN_SOURCE,
   START,
@@ -18,7 +18,7 @@ const {
   parse,
   setup,
   syncSharedSkills,
-} = require("../harness/setup.cjs");
+} = require("../setup.cjs");
 
 const WORKFLOW_SKILLS = [
   "architecture", "commit", "debug", "decision-map", "design", "implement",
@@ -50,7 +50,7 @@ function fixtureCheckout(base) {
   for (const name of MAINTENANCE_SKILLS) write(path.join(checkout, "skills", "maintenance", name, "SKILL.md"), `---\nname: ${name}\ndescription: test\n---\n`);
   write(path.join(checkout, "skills", "domain", "herdr", "SKILL.md"), "---\nname: herdr\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "rust", "SKILL.md"), "---\nname: rust\ndescription: test\n---\n");
-  fs.cpSync(path.join(root, "harness", "agents"), path.join(checkout, "harness", "agents"), { recursive: true });
+  fs.cpSync(path.join(root, "agents"), path.join(checkout, "agents"), { recursive: true });
   return checkout;
 }
 
@@ -67,7 +67,7 @@ test("package plan installs missing packages and updates present packages", () =
   assert.deepEqual(actions.map((item) => item.action), ["update", "install", "update"]);
 });
 
-test("each run rebuilds both skill roots from the harness alone", () => {
+test("each run rebuilds both skill roots from the package alone", () => {
   const base = tempDir();
   const home = path.join(base, "home");
   const checkout = fixtureCheckout(base);
@@ -230,7 +230,7 @@ test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
   write(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "custom reviewer\n");
   // A decoy in Pi's own clone: presets must come from the running package, not from there.
   const piClone = path.join(home, ".pi", "agent", "git", "github.com", "bryan824", "kirin-pi");
-  write(path.join(piClone, "harness", "agents", "reviewer.md"), "decoy reviewer\n");
+  write(path.join(piClone, "agents", "reviewer.md"), "decoy reviewer\n");
 
   const fakePi = path.join(home, "bin", "pi");
   write(fakePi, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/pi-calls\"\n");
@@ -252,7 +252,7 @@ test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
   assert.equal(fs.readFileSync(reviewerBackups[0], "utf8"), "custom reviewer\n");
   assert.equal(
     fs.readFileSync(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "utf8"),
-    fs.readFileSync(path.join(root, "harness", "agents", "reviewer.md"), "utf8"),
+    fs.readFileSync(path.join(root, "agents", "reviewer.md"), "utf8"),
   );
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, ".pi", "agent", "subagents.json"), "utf8")), SUBAGENT_DEFAULTS);

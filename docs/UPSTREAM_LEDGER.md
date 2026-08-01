@@ -9,9 +9,9 @@ Sole record of third-party repositories considered, borrowed from, or required b
 | [`earendil-works/pi`](https://github.com/earendil-works/pi) | coding-agent `0.83.0` | Host API. Kirin uses native package resources, tool middleware, settled-agent events, provider refresh, constrained sampling, and public session APIs. | New coding-agent changelog adds a smaller native replacement for Kirin code. |
 | [`tintinweb/pi-subagents`](https://github.com/tintinweb/pi-subagents) | `0.14.3` | Runtime for custom agent presets. Kirin uses model/thinking pins, hermetic specialists, extension scoping, skill preload, worktrees, compact tool prose, and transcript controls. | Preset schema or built-in fleet changes. |
 | [`juicesharp/rpiv-mono`](https://github.com/juicesharp/rpiv-mono) | current `rpiv-pi/agents` reviewed | Source of several original specialist-agent roles and workflow seam ideas. Kirin now keeps a smaller rewritten fleet. | Its agents gain a distinct role missing from Kirin's fleet. |
-| [`herdrdev/herdr`](https://github.com/herdrdev/herdr) | integration version 7 and current skill | Official sync target for `harness/extensions/herdr/agent-state.ts` and `skills/domain/herdr/SKILL.md`. Kirin keeps this support intact and layers Pi ergonomics on top. | Either official file changes. |
+| [`herdrdev/herdr`](https://github.com/herdrdev/herdr) | integration version 7 and current skill | Official sync target for `extensions/herdr/agent-state.ts` and `skills/domain/herdr/SKILL.md`. Kirin keeps this support intact and layers Pi ergonomics on top. | Either official file changes. |
 | [`ogulcancelik/pi-extensions`](https://github.com/ogulcancelik/pi-extensions) | Herdr integration revision `1deb3f1` | Substantial basis for Kirin's typed Herdr orchestration tool. | Official Herdr tool support supersedes or changes it. |
-| [`mitsuhiko/agent-stuff`](https://github.com/mitsuhiko/agent-stuff) | current session breakdown reviewed | Substantial basis for `harness/extensions/session-breakdown.ts`; command-policy ideas informed `guardrails`. | Pi ships equivalent usage UI or session format changes. |
+| [`mitsuhiko/agent-stuff`](https://github.com/mitsuhiko/agent-stuff) | current session breakdown reviewed | Substantial basis for `extensions/session-breakdown.ts`; command-policy ideas informed `guardrails`. | Pi ships equivalent usage UI or session format changes. |
 | [`steipete/agent-scripts`](https://github.com/steipete/agent-scripts) | skill-cleaner revision `2d007c1` | Basis for `skills/maintenance/skill-audit/scripts/skill-cleaner.ts`. | Analyzer gains useful Pi-first evidence or current parser support. |
 | [`mattpocock/skills`](https://github.com/mattpocock/skills) | `2ab9580` | Design/planning lessons and substantial prototype reference text. | A distinct mindset or artifact transition appears. |
 | [`obra/superpowers`](https://github.com/obra/superpowers) | `44c9b2d` | Workflow-discipline comparison source; no runtime dependency. | Kirin repeatedly drops lifecycle gates. |
@@ -25,12 +25,12 @@ Sole record of third-party repositories considered, borrowed from, or required b
 
 | Kirin surface | Relationship | License |
 |---|---|---|
-| `harness/extensions/herdr/index.ts` | Modified substantial orchestration code | MIT, Can Celik |
-| `harness/extensions/herdr/agent-state.ts`, `skills/domain/herdr/SKILL.md` | Official Herdr support, kept current then extended | Apache-2.0 |
-| `harness/extensions/session-breakdown.ts` | Modified substantial code | Apache-2.0 |
+| `extensions/herdr/index.ts` | Modified substantial orchestration code | MIT, Can Celik |
+| `extensions/herdr/agent-state.ts`, `skills/domain/herdr/SKILL.md` | Official Herdr support, kept current then extended | Apache-2.0 |
+| `extensions/session-breakdown.ts` | Modified substantial code | Apache-2.0 |
 | `skills/maintenance/skill-audit/scripts/skill-cleaner.ts` | Modified substantial code | MIT, Peter Steinberger |
 | `skills/workflow/prototype/LOGIC.md`, `skills/workflow/prototype/UI.md` | Substantial adapted text | MIT, Matt Pocock |
-| `harness/agents/{claim-verifier,codebase-analyzer,precedent-locator,web-researcher}.md` | Rewritten specialist roles | MIT, juicesharp |
+| `agents/{claim-verifier,codebase-analyzer,precedent-locator,web-researcher}.md` | Rewritten specialist roles | MIT, juicesharp |
 | `skills/domain/rust/` | Distilled guidance, rewritten | MIT, Microsoft contributors |
 
 All other rows in the relationship table are idea/provenance records, not copied runtime surfaces.
@@ -79,4 +79,4 @@ SOFTWARE.
 
 ## Apache-2.0 notice
 
-`harness/extensions/herdr/agent-state.ts`, `skills/domain/herdr/SKILL.md`, and `harness/extensions/session-breakdown.ts` are Apache-2.0-licensed sources or derivatives. The complete license is distributed as `LICENSE-APACHE`. No upstream `NOTICE` files exist for those source repositories.
+`extensions/herdr/agent-state.ts`, `skills/domain/herdr/SKILL.md`, and `extensions/session-breakdown.ts` are Apache-2.0-licensed sources or derivatives. The complete license is distributed as `LICENSE-APACHE`. No upstream `NOTICE` files exist for those source repositories.
