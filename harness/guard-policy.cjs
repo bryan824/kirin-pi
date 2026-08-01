@@ -3,11 +3,56 @@
 // Returns a deny message before broad git staging, hook bypass, or direct
 // Python environment/tooling commands can run.
 
+// Split on shell separators that are actually separators — a `;` or `|` inside
+// quotes is an argument. Splitting the raw string blocked ordinary commands
+// whose *arguments* merely mention a guarded tool, `grep -E "uv|python"` being
+// the one that bites daily: the naive split produced a bare `python` segment.
+// Still approximate by design (no substitution or heredoc parsing); it only has
+// to find command positions well enough to judge them.
 function splitShellSegments(command) {
-  return command
-    .split(/\n|;|&&|\|\|?/) // intentionally approximate: catches normal shell segments before execution
-    .map((segment) => segment.trim())
-    .filter(Boolean);
+  const segments = [];
+  let current = "";
+  let quote = null;
+
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+
+    if (quote) {
+      current += char;
+      if (char === "\\" && quote === '"' && i + 1 < command.length) {
+        current += command[i + 1];
+        i += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+
+    if (char === "\\" && i + 1 < command.length) {
+      current += char + command[i + 1];
+      i += 1;
+      continue;
+    }
+
+    if (char === "\n" || char === ";" || char === "|" || char === "&") {
+      segments.push(current);
+      current = "";
+      // Consume the second character of `&&` and `||` so it cannot start a segment.
+      if (command[i + 1] === char) i += 1;
+      continue;
+    }
+
+    current += char;
+  }
+  segments.push(current);
+
+  return segments.map((segment) => segment.trim()).filter(Boolean);
 }
 
 function shellTokens(segment) {

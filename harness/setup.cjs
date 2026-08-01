@@ -184,11 +184,6 @@ function lstat(file) {
   }
 }
 
-function resolvedLink(file) {
-  const target = fs.readlinkSync(file);
-  return path.resolve(path.dirname(file), target);
-}
-
 function backupExisting(target, backupDir) {
   fs.mkdirSync(backupDir, { recursive: true });
   let destination = path.join(backupDir, path.basename(target));
@@ -198,16 +193,26 @@ function backupExisting(target, backupDir) {
   return destination;
 }
 
-function ensureLink(source, target, backupDir) {
+// Instructions are copied rather than linked, the way skill roots already are.
+// A symlink reads fine but writes badly: editors and agent tooling refuse to
+// write through one, dotfile managers fight over the link, and a copy is what
+// the rest of this installer produces. The canonical file stays the source of
+// truth — every run overwrites the copies from it.
+function ensureCopy(content, target, backupDir) {
   const current = lstat(target);
-  if (current?.isSymbolicLink() && resolvedLink(target) === path.resolve(source)) {
+  if (current?.isFile() && fs.readFileSync(target, "utf8") === content) {
     return { status: "unchanged" };
   }
 
   let backup;
+  // Replace a link outright rather than writing through it: writing through
+  // would edit whatever it points at, which is how the old layout's canonical
+  // file could end up being written twice in one run.
   if (current) backup = backupExisting(target, backupDir);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.symlinkSync(path.resolve(source), target, "dir");
+  const temp = `${target}.kirin-${process.pid}.tmp`;
+  fs.writeFileSync(temp, content, { encoding: "utf8", mode: 0o600 });
+  fs.renameSync(temp, target);
   return { status: current ? "replaced" : "added", backup };
 }
 
@@ -285,21 +290,21 @@ function installInstructions(home, runId, withPi) {
 
   const backups = [];
   if (withPi) {
-    const piLink = ensureLink(
-      canonical,
+    const piCopy = ensureCopy(
+      canonicalContent,
       piAgents,
       path.join(home, ".pi", "agent", "kirin-backups", runId, "instructions"),
     );
-    if (piLink.backup) backups.push(piLink.backup);
+    if (piCopy.backup) backups.push(piCopy.backup);
   }
 
   const claudeAgents = path.join(home, ".claude", "AGENTS.md");
-  const claudeLink = ensureLink(
-    canonical,
+  const claudeCopy = ensureCopy(
+    canonicalContent,
     claudeAgents,
     path.join(home, ".claude", "kirin-backups", runId, "instructions"),
   );
-  if (claudeLink.backup) backups.push(claudeLink.backup);
+  if (claudeCopy.backup) backups.push(claudeCopy.backup);
 
   const claudeFile = path.join(home, ".claude", "CLAUDE.md");
   let remaining = fs.existsSync(claudeFile) ? fs.readFileSync(claudeFile, "utf8") : "";

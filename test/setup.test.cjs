@@ -110,10 +110,17 @@ test("Claude imports canonical Pi AGENTS while custom text survives", () => {
   write(path.join(home, ".claude", "CLAUDE.md"), `${WORKFLOW}\n\nCustom Claude note.\n`);
 
   const first = installInstructions(home, "run-1", true);
-  assert.equal(first.backups.length, 1);
+  // Nothing to back up: the Pi file already held exactly what would be written,
+  // so it is left alone. The old layout backed it up regardless, because turning
+  // a file into a symlink destroyed it even when the content matched.
+  assert.equal(first.backups.length, 0);
   const canonical = path.join(home, ".agents", "AGENTS.md");
-  assert.equal(fs.readlinkSync(path.join(home, ".claude", "AGENTS.md")), canonical);
-  assert.equal(fs.readlinkSync(piAgents), canonical);
+  // Real files, not links: editors and agent tooling refuse to write through a
+  // symlink, so every instruction target is a copy of the canonical file.
+  for (const copy of [path.join(home, ".claude", "AGENTS.md"), piAgents]) {
+    assert.equal(fs.lstatSync(copy).isSymbolicLink(), false);
+    assert.equal(fs.readFileSync(copy, "utf8"), fs.readFileSync(canonical, "utf8"));
+  }
   const claude = fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8");
   assert.equal(claude, "@AGENTS.md\n\nCustom Claude note.\n");
   const shared = fs.readFileSync(canonical, "utf8");
@@ -124,7 +131,7 @@ test("Claude imports canonical Pi AGENTS while custom text survives", () => {
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), claude);
 });
 
-test("instruction writes preserve dotfile-managed symlinks", () => {
+test("instruction copies replace a managed symlink and back it up", () => {
   const home = tempDir();
   const managedPi = path.join(home, "managed", "AGENTS.md");
   const managedClaude = path.join(home, "managed", "CLAUDE.md");
@@ -139,14 +146,33 @@ test("instruction writes preserve dotfile-managed symlinks", () => {
   fs.symlinkSync(managedPi, piLink);
   fs.symlinkSync(managedClaude, claudeLink);
 
-  installInstructions(home, "run-1", true);
-  assert.equal(fs.lstatSync(piLink).isSymbolicLink(), true);
-  assert.equal(fs.lstatSync(claudeLink).isSymbolicLink(), true);
+  const result = installInstructions(home, "run-1", true);
+
+  // AGENTS.md becomes a real file. The previous link is preserved in a backup
+  // rather than followed, so the file it pointed at is left untouched.
+  assert.equal(fs.lstatSync(piLink).isSymbolicLink(), false);
+  assert.equal(fs.readFileSync(managedPi, "utf8"), "Pi custom.\n");
   assert.equal(fs.statSync(managedPi).mode & 0o777, 0o640);
+  assert.equal(result.backups.length > 0, true);
+
+  // CLAUDE.md is still written through its link — that path is a merge of user
+  // text, not a copy of the canonical file, so a dotfile manager keeps owning it.
+  assert.equal(fs.lstatSync(claudeLink).isSymbolicLink(), true);
   assert.equal(fs.statSync(managedClaude).mode & 0o777, 0o600);
-  assert.match(fs.readFileSync(managedPi, "utf8"), /Pi custom/);
-  assert.equal(fs.readlinkSync(piLink), path.join(home, ".agents", "AGENTS.md"));
   assert.equal(fs.readFileSync(managedClaude, "utf8"), "@AGENTS.md\n\nClaude custom.\n");
+});
+
+test("a second run rewrites a hand-edited copy from the canonical file", () => {
+  const home = tempDir();
+  installInstructions(home, "run-1", true);
+  const claudeAgents = path.join(home, ".claude", "AGENTS.md");
+  fs.writeFileSync(claudeAgents, "hand edited, will not survive\n");
+
+  installInstructions(home, "run-2", true);
+  assert.equal(
+    fs.readFileSync(claudeAgents, "utf8"),
+    fs.readFileSync(path.join(home, ".agents", "AGENTS.md"), "utf8"),
+  );
 });
 
 test("Claude-specific earned rules survive canonicalization", () => {
@@ -191,7 +217,12 @@ test("zero-argument CLI installs shared skills and Claude instructions without P
   assert.equal(fs.existsSync(path.join(home, ".pi")), false);
   assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
-  assert.equal(fs.readlinkSync(path.join(home, ".claude", "AGENTS.md")), path.join(home, ".agents", "AGENTS.md"));
+  const claudeAgents = path.join(home, ".claude", "AGENTS.md");
+  assert.equal(fs.lstatSync(claudeAgents).isSymbolicLink(), false);
+  assert.equal(
+    fs.readFileSync(claudeAgents, "utf8"),
+    fs.readFileSync(path.join(home, ".agents", "AGENTS.md"), "utf8"),
+  );
 });
 
 test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
