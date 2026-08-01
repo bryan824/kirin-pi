@@ -320,7 +320,6 @@ export default function chatGptExportExtension(pi: ExtensionAPI) {
 			"Ask the user for the local HTML export path before calling parse_chatgpt_export; it intentionally has no default path because exports are local/private files.",
 		],
 		parameters: ChatGptExportParams,
-		constrainedSampling: { type: "json_schema", strict: "prefer" },
 
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			if (signal?.aborted) {

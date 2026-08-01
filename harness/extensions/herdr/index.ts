@@ -484,7 +484,6 @@ export default function (pi: ExtensionAPI) {
 		name: "herdr",
 		label: "herdr",
 		executionMode: "sequential",
-		constrainedSampling: { type: "json_schema", strict: "prefer" },
 		description:
 			"Herdr-native pane orchestration for long-running workflows. " +
 			"Actions: list panes, manage workspaces and tabs, split existing panes, submit lines atomically in existing panes, read output, watch readiness, wait for one or more agent panes to reach target statuses, send raw text or keys, focus contexts, and stop panes.",
