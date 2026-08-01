@@ -104,6 +104,8 @@ test("Herdr keeps official state support intact and layers its tool on top", () 
   expect(state).toContain("sendRequestAttempt(request, 500)");
   expect(state).toContain("sendRequestAttempt(request, 1500)");
   expect(integration).toContain("setupHerdrAgentState(pi)");
+  expect(integration).toContain("{ additionalProperties: false })");
+  expect(integration).not.toContain("constrainedSampling:");
   expect(integration).toContain("https://github.com/herdrdev/herdr/blob/master/src/integration/assets/pi/herdr-agent-state.ts");
   expect(integration).toContain("https://github.com/herdrdev/herdr/blob/master/skills/herdr/SKILL.md");
   expect(skill).toContain("## Pi integration");
