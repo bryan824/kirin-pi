@@ -12,7 +12,7 @@ const ALLOWED_FIELDS = new Set([
 const EXPECTED = {
   workflow: ["architecture", "commit", "debug", "decision-map", "design", "implement", "parallel-work", "plan", "prototype", "research", "survey", "verify"],
   maintenance: ["project-memory", "session-close", "skill-audit", "write-skill"],
-  domain: ["chatgpt-export", "herdr", "python-tooling", "rust", "teach", "ui-design"],
+  domain: ["apple-interface", "chatgpt-export", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
 
 function skillFiles() {
@@ -21,6 +21,13 @@ function skillFiles() {
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.join(skillsDir, group, entry.name, "SKILL.md")),
   );
+}
+
+function markdownFiles(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(dir, entry.name);
+    return entry.isDirectory() ? markdownFiles(file) : entry.name.endsWith(".md") ? [file] : [];
+  });
 }
 
 function fields(block) {
@@ -38,7 +45,18 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 22);
+  assert.equal(skillFiles().length, 30);
+});
+
+test("README documents the exact approved skill fleet", () => {
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  for (const [group, names] of Object.entries(EXPECTED)) {
+    const heading = `${group[0].toUpperCase()}${group.slice(1)} skills`;
+    const section = readme.match(new RegExp(`### ${heading}\\n\\n\\| Skill \\| Purpose \\|\\n\\|---\\|---\\|\\n((?:\\|.*\\n)+)`));
+    assert.ok(section, heading);
+    const actual = [...section[1].matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]).sort();
+    assert.deepEqual(actual, names.slice().sort(), group);
+  }
 });
 
 test("skills use Pi-compatible frontmatter and directory-matched names", () => {
@@ -54,6 +72,23 @@ test("skills use Pi-compatible frontmatter and directory-matched names", () => {
     assert.ok(parsed.description, `${rel}: missing description`);
     assert.ok(parsed.description.replace(/^["']|["']$/g, "").length <= 1024, rel);
     for (const key of Object.keys(parsed)) assert.ok(ALLOWED_FIELDS.has(key), `${rel}: ${key}`);
+  }
+});
+
+test("frontend skill Markdown relative links resolve", () => {
+  const dirs = [
+    ...EXPECTED.domain
+      .filter((name) => name.startsWith("frontend-") || name === "apple-interface")
+      .map((name) => path.join(skillsDir, "domain", name)),
+    path.join(skillsDir, "workflow", "prototype"),
+  ];
+  for (const file of dirs.flatMap(markdownFiles)) {
+    for (const match of fs.readFileSync(file, "utf8").matchAll(/\]\(([^)]+)\)/g)) {
+      const href = match[1].split("#", 1)[0];
+      if (!href || /^[a-z][a-z\d+.-]*:/i.test(href)) continue;
+      const target = path.resolve(path.dirname(file), decodeURI(href));
+      assert.equal(fs.existsSync(target), true, `${path.relative(root, file)}: ${href}`);
+    }
   }
 });
 

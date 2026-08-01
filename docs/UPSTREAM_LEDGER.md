@@ -17,6 +17,8 @@ Sole record of third-party repositories considered, borrowed from, or required b
 | [`obra/superpowers`](https://github.com/obra/superpowers) | `44c9b2d` | Workflow-discipline comparison source; no runtime dependency. | Kirin repeatedly drops lifecycle gates. |
 | [`tw93/Waza`](https://github.com/tw93/Waza) | `9c97ccb` | Small-skill and verification ideas; no runtime dependency. | A concise new mechanism addresses observed Kirin failure. |
 | [`addyosmani/agent-skills`](https://github.com/addyosmani/agent-skills) | `7829ffd` | Context, review, and simplification ideas; no runtime dependency. | New evidence-backed mechanism beats Kirin's current owner. |
+| [`jakubkrehel/skills`](https://github.com/jakubkrehel/skills) | `a673333` | Distilled source for coordinated frontend-design ownership and domain guidance; no runtime dependency. | Its owner boundaries or domain guidance change materially. |
+| [`emilkowalski/skills`](https://github.com/emilkowalski/skills) | `70744e3` | Distilled source for motion, Apple-interface, and UI-prototype guidance; no runtime dependency. | Its motion mechanics or prototype workflow change materially. |
 | [`lx-industries/ms-rust-skill`](https://github.com/lx-industries/ms-rust-skill) | reviewed guideline set | Source material distilled into Kirin's Rust references; no runtime dependency. | Rust guidance changes materially. |
 | [`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) | current local plugin | External always-on minimalism stance; not bundled by Kirin. | Kirin duplicates its runtime behavior or loses accepted simplifications. |
 | [`kepano/obsidian-skills`](https://github.com/kepano/obsidian-skills) | reviewed, not bundled | Removed from default harness. Vault projects may install their own project-local skills. | A repository explicitly needs vault tooling. |
@@ -32,6 +34,8 @@ Sole record of third-party repositories considered, borrowed from, or required b
 | `skills/workflow/prototype/LOGIC.md`, `skills/workflow/prototype/UI.md` | Substantial adapted text | MIT, Matt Pocock |
 | `agents/{claim-verifier,codebase-analyzer,precedent-locator,web-researcher}.md` | Rewritten specialist roles | MIT, juicesharp |
 | `skills/domain/rust/` | Distilled guidance, rewritten | MIT, Microsoft contributors |
+| `skills/domain/frontend-{design,accessibility,layout,writing,typography,color,polish}/` | Distilled and substantially rewritten guidance | MIT, Jakub Krehel |
+| `skills/domain/{frontend-motion,frontend-polish,apple-interface}/`, `skills/workflow/prototype/{SKILL.md,UI.md}` | Distilled and substantially rewritten guidance | MIT, Emil Kowalski |
 
 All other rows in the relationship table are idea/provenance records, not copied runtime surfaces.
 
@@ -58,6 +62,10 @@ Copyright (c) 2025 Can Celik
 Copyright (c) 2026 Peter Steinberger
 
 Copyright Microsoft contributors
+
+Copyright (c) 2026 Jakub Krehel
+
+Copyright (c) 2026 Emil Kowalski
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

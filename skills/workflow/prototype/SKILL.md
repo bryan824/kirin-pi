@@ -13,8 +13,8 @@ rot in the repo once it has answered its question.
 
 - Pick the branch from the question (ask if the user is reachable and it's ambiguous):
   "does this logic/state feel right?" → [LOGIC.md](LOGIC.md), a tiny interactive terminal
-  app; "what should this look like?" → [UI.md](UI.md), several radical UI variants on one
-  route. Default by surrounding code (backend → logic, page → UI) and state the assumption.
+  app; "what should this look like?" → [UI.md](UI.md), a disposable visual comparison.
+  Default by surrounding code (backend → logic, page → UI) and state the assumption.
 - Throwaway from day one and named as such, located next to where it'll be used; obey the
   project's existing routing and task-runner conventions. One command to run.
 - No persistence by default; skip tests, error handling, and abstractions; surface the full

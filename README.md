@@ -44,7 +44,7 @@ bug:   debug -> verify -> commit
 | `implement` | Build one approved outcome or plan unit. |
 | `parallel-work` | Fan ready file-disjoint packets across workers and reviewers. |
 | `plan` | Produce one approved intent + blocker graph artifact. |
-| `prototype` | Answer one question with throwaway runnable evidence. |
+| `prototype` | Answer one logic question or compare divergent UI variants, then delete the harness. |
 | `research` | Answer one external question from primary sources. |
 | `survey` | Map current repository behavior without editing. |
 | `verify` | Independently judge complete candidate on Spec and Standards. |
@@ -62,12 +62,20 @@ bug:   debug -> verify -> commit
 
 | Skill | Purpose |
 |---|---|
+| `apple-interface` | Apply Apple-style direct manipulation, materials, and platform behavior when explicit. |
 | `chatgpt-export` | Recover saved ChatGPT HTML as Markdown or JSON in Pi or Claude Code. |
+| `frontend-accessibility` | Build native-first interfaces for keyboard, screen reader, zoom, and motion needs. |
+| `frontend-color` | Preserve semantic color roles and verify rendered themes and contrast. |
+| `frontend-design` | Set one aesthetic direction and coordinate the frontend disciplines. |
+| `frontend-layout` | Make spatial structure survive containers, content growth, and direction changes. |
+| `frontend-motion` | Make state and gesture motion purposeful, continuous, and economical. |
+| `frontend-polish` | Refine surfaces, elevation, optical alignment, and icon craft. |
+| `frontend-typography` | Keep type hierarchy, wrapping, values, and language rendering stable. |
+| `frontend-writing` | Write clear, consistent, localization-safe interface copy. |
 | `herdr` | Official Herdr control guidance plus Kirin's typed Pi integration. |
 | `python-tooling` | uv, Ruff, and ty as one Python toolchain. |
 | `rust` | Bryan's Rust API, crate, error, safety, and verification conventions. |
 | `teach` | Create a persistent learning workspace when explicitly requested. |
-| `ui-design` | Ship distinctive working UI from one aesthetic direction. |
 
 Vault, Obsidian, and travel skills are intentionally absent. A project that needs private or domain-specific behavior owns it under `.agents/skills/` or `.pi/skills/`.
 
@@ -134,7 +142,7 @@ It idempotently:
 
 Both skill roots are Kirin output and are replaced wholesale on every run: nothing placed there by hand survives, so project-specific skills belong under `.agents/skills/` or `.pi/skills/` in the project itself. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
 
-Rerun the same command whenever you want to update. Domain skills such as Rust, Python tooling, teaching, and UI design remain project opt-in under `.agents/skills/` or `.pi/skills/`.
+Rerun the same command whenever you want to update. Domain skills such as Rust, Python tooling, teaching, and the frontend design set remain project opt-in under `.agents/skills/` or `.pi/skills/`.
 
 Herdr integration and guidance are included; the Herdr application itself remains a separate system install.
 

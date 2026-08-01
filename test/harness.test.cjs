@@ -93,5 +93,8 @@ test("required legal and current-truth docs exist", () => {
   const ledger = fs.readFileSync(path.join(root, "docs", "UPSTREAM_LEDGER.md"), "utf8");
   assert.match(ledger, /MIT notices/);
   assert.match(ledger, /Apache-2\.0 notice/);
+  for (const notice of ["Copyright (c) 2026 Jakub Krehel", "Copyright (c) 2026 Emil Kowalski"]) {
+    assert.ok(ledger.includes(notice), notice);
+  }
   assert.match(ledger, /herdrdev\/herdr/);
 });
