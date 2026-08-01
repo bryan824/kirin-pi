@@ -12,7 +12,7 @@ const ALLOWED_FIELDS = new Set([
 const EXPECTED = {
   workflow: ["architecture", "commit", "debug", "decision-map", "design", "implement", "parallel-work", "plan", "prototype", "research", "survey", "verify"],
   maintenance: ["project-memory", "session-close", "skill-audit", "write-skill"],
-  domain: ["herdr", "python-tooling", "rust", "teach", "ui-design"],
+  domain: ["chatgpt-export", "herdr", "python-tooling", "rust", "teach", "ui-design"],
 };
 
 function skillFiles() {
@@ -38,7 +38,7 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 21);
+  assert.equal(skillFiles().length, 22);
 });
 
 test("skills use Pi-compatible frontmatter and directory-matched names", () => {

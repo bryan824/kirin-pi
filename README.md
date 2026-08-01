@@ -11,6 +11,7 @@ kirin-pi/
 ├── agents/       Pi subagent presets
 ├── extensions/   Pi runtime extensions
 ├── hooks/        Claude and Git hooks
+├── chatgpt-export.ts  shared parser CLI
 ├── setup.cjs     global installer
 ├── skills/       portable workflow, maintenance, and domain prompts
 ├── docs/         current truth and upstream provenance
@@ -61,6 +62,7 @@ bug:   debug -> verify -> commit
 
 | Skill | Purpose |
 |---|---|
+| `chatgpt-export` | Recover saved ChatGPT HTML as Markdown or JSON in Pi or Claude Code. |
 | `herdr` | Official Herdr control guidance plus Kirin's typed Pi integration. |
 | `python-tooling` | uv, Ruff, and ty as one Python toolchain. |
 | `rust` | Bryan's Rust API, crate, error, safety, and verification conventions. |
@@ -81,6 +83,19 @@ Vault, Obsidian, and travel skills are intentionally absent. A project that need
 | `herdr` | Pane/workspace orchestration and settled Pi status reporting. |
 | `opencode-cli` | Register local OpenCode CLI models as a Pi provider. |
 | `session-breakdown` | Interactive session/token/model/cost dashboard. |
+
+### Claude native equivalents
+
+Claude hooks cover lifecycle events, not Pi's full extension API. Kirin uses the smallest native surface instead of adding an MCP server or plugin:
+
+| Pi extension | Claude Code equivalent |
+|---|---|
+| `agent-sync` | None. Pi preset schema and OpenAI model pins are Pi-specific; Claude's native agents remain separate. |
+| `chatgpt-export` | Shared `chatgpt-export` skill and `~/.claude/kirin/chatgpt-export.ts` CLI. |
+| `guardrails` | Global `PreToolUse:Bash` and `SessionStart` hooks using the same policy and Git-hook installer as Pi. |
+| `herdr` | Shared Herdr skill and CLI. Herdr owns Claude agent-state hooks; Pi's typed aliases and session replay stay Pi-only. |
+| `opencode-cli` | Unsupported: Claude provider registration is unsupported. |
+| `session-breakdown` | Claude's built-in `/insights`; Pi's custom TUI and exact 7/30/90-day view stay Pi-only. |
 
 ### Subagent presets
 
@@ -111,8 +126,10 @@ Pin a commit rather than a branch. `bunx` caches per source string and resolves 
 
 It idempotently:
 
-- rebuilds `~/.agents/skills` and `~/.claude/skills` from scratch, so both hold exactly the workflow, maintenance, and Herdr skills this repository ships
+- rebuilds `~/.agents/skills` and `~/.claude/skills` from scratch, including the shared ChatGPT export and Herdr skills
 - owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
+- copies Claude runtime files under `~/.claude/kirin/` and idempotently merges only Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
+- backs up changed Claude settings under `~/.claude/kirin-backups/<run>/settings/`; restoring that file disables the managed hooks, after which `~/.claude/kirin/` is inert
 - when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
 
 Both skill roots are Kirin output and are replaced wholesale on every run: nothing placed there by hand survives, so project-specific skills belong under `.agents/skills/` or `.pi/skills/` in the project itself. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.

@@ -24,6 +24,9 @@ const START = "<!-- kirin-workflow:start -->";
 const END = "<!-- kirin-workflow:end -->";
 const RATCHET_START = "<!-- kirin-ratchet:start -->";
 const RATCHET_END = "<!-- kirin-ratchet:end -->";
+const CLAUDE_GUARD_COMMAND = 'bun "$HOME/.claude/kirin/hooks/claude-guard.cjs"';
+const CLAUDE_INSTALL_COMMAND = 'cd "$CLAUDE_PROJECT_DIR" && bun "$HOME/.claude/kirin/hooks/install.cjs" --ensure';
+const CLAUDE_RUNTIME_FILES = ["chatgpt-export.ts", "guard-policy.cjs", "hooks/claude-guard.cjs", "hooks/install.cjs"];
 
 const WORKFLOW = [
   START,
@@ -63,8 +66,9 @@ function usage() {
 Pin a commit, not a branch: bunx resolves each source string once and caches it.
 
 Installs or updates the global Kirin harness:
-- shared workflow, maintenance, and Herdr skills for all agents
+- shared workflow, maintenance, ChatGPT export, and Herdr skills for all agents
 - one canonical global AGENTS.md imported by Claude Code
+- Claude hooks and standalone runtime under ~/.claude/kirin
 - Pi packages, agent presets, and subagent defaults when pi is in PATH
 
 Rerun the same command to update everything.
@@ -184,12 +188,25 @@ function lstat(file) {
   }
 }
 
-function backupExisting(target, backupDir) {
+function backupPath(target, backupDir) {
   fs.mkdirSync(backupDir, { recursive: true });
   let destination = path.join(backupDir, path.basename(target));
   let suffix = 2;
   while (lstat(destination)) destination = path.join(backupDir, `${path.basename(target)}-${suffix++}`);
+  return destination;
+}
+
+function backupExisting(target, backupDir) {
+  const destination = backupPath(target, backupDir);
   fs.renameSync(target, destination);
+  return destination;
+}
+
+function backupFile(target, backupDir) {
+  const source = writeTarget(target);
+  if (!lstat(source)) return undefined;
+  const destination = backupPath(source, backupDir);
+  fs.copyFileSync(source, destination);
   return destination;
 }
 
@@ -220,6 +237,7 @@ function sharedSkillSources(packageRoot) {
   const roots = [
     path.join(packageRoot, "skills", "workflow"),
     path.join(packageRoot, "skills", "maintenance"),
+    path.join(packageRoot, "skills", "domain", "chatgpt-export"),
     path.join(packageRoot, "skills", "domain", "herdr"),
   ];
   const skills = [];
@@ -277,6 +295,64 @@ function mergeSubagentSettings(file) {
   writeJson(file, { ...current, ...SUBAGENT_DEFAULTS });
 }
 
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function managedClaudeHook(hook) {
+  return isObject(hook) && typeof hook.command === "string" && hook.command.includes("/.claude/kirin/hooks/");
+}
+
+function mergeClaudeSettings(settings) {
+  if (!isObject(settings)) throw new Error("Claude settings must be a JSON object.");
+  const hooks = settings.hooks ?? {};
+  if (!isObject(hooks)) throw new Error("Claude settings hooks must be a JSON object.");
+
+  for (const [event, entries] of Object.entries(hooks)) {
+    if (!Array.isArray(entries)) throw new Error(`Claude settings hooks.${event} must be an array.`);
+    for (const entry of entries) {
+      if (!isObject(entry) || !Array.isArray(entry.hooks)) {
+        throw new Error(`Claude settings hooks.${event} hook entry must contain a hooks array.`);
+      }
+      if (entry.hooks.some((hook) => !isObject(hook))) {
+        throw new Error(`Claude settings hooks.${event} hook definition must be a JSON object.`);
+      }
+    }
+  }
+
+  const nextHooks = { ...hooks };
+  for (const event of ["PreToolUse", "SessionStart"]) {
+    const entries = hooks[event] ?? [];
+    nextHooks[event] = entries.flatMap((entry) => {
+      const remaining = entry.hooks.filter((hook) => !managedClaudeHook(hook));
+      return remaining.length ? [{ ...entry, hooks: remaining }] : [];
+    });
+  }
+
+  nextHooks.PreToolUse.push({
+    matcher: "Bash",
+    hooks: [{ type: "command", command: CLAUDE_GUARD_COMMAND, timeout: 5 }],
+  });
+  nextHooks.SessionStart.push({
+    hooks: [{ type: "command", command: CLAUDE_INSTALL_COMMAND, timeout: 5 }],
+  });
+  return { ...settings, hooks: nextHooks };
+}
+
+function installClaudeRuntime(packageRoot, home, runId) {
+  const runtime = path.join(home, ".claude", "kirin");
+  const backups = [];
+  for (const relative of CLAUDE_RUNTIME_FILES) {
+    const copied = ensureCopy(
+      fs.readFileSync(path.join(packageRoot, relative), "utf8"),
+      path.join(runtime, relative),
+      path.join(home, ".claude", "kirin-backups", runId, "runtime"),
+    );
+    if (copied.backup) backups.push(copied.backup);
+  }
+  return { runtime, backups };
+}
+
 function installInstructions(home, runId, withPi) {
   const canonical = path.join(home, ".agents", "AGENTS.md");
   const piAgents = path.join(home, ".pi", "agent", "AGENTS.md");
@@ -321,22 +397,29 @@ function installInstructions(home, runId, withPi) {
 function setup(options = {}, packageRoot = __dirname) {
   const home = path.resolve(options.home ?? os.homedir());
   const pi = options.pi === undefined ? piBinary() : options.pi;
-  const settingsFile = path.join(home, ".pi", "agent", "settings.json");
-  const actions = pi ? packageActions(readJson(settingsFile, {})) : [];
+  const piSettingsFile = path.join(home, ".pi", "agent", "settings.json");
+  const actions = pi ? packageActions(readJson(piSettingsFile, {})) : [];
 
   if (options.dryRun) {
     console.log("Kirin setup dry run:");
     console.log(`- install shared skills under ${path.join(home, ".agents", "skills")}`);
-    console.log(`- link Claude skills and instructions under ${path.join(home, ".claude")}`);
+    console.log(`- install Claude skills, instructions, and hooks under ${path.join(home, ".claude")}`);
     if (pi) for (const item of actions) console.log(`- pi ${item.action} ${item.source}`);
     else console.log("- pi not found; skip Pi-specific configuration");
     return { dryRun: true, pi: Boolean(pi) };
   }
 
+  const claudeSettingsFile = path.join(home, ".claude", "settings.json");
+  const currentClaudeSettings = readJson(claudeSettingsFile, {});
+  const mergedClaudeSettings = mergeClaudeSettings(currentClaudeSettings);
+  const mergedClaudeText = `${JSON.stringify(mergedClaudeSettings, null, 2)}\n`;
+  const currentClaudeText = fs.existsSync(claudeSettingsFile) ? fs.readFileSync(claudeSettingsFile, "utf8") : undefined;
+
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
-  const skills = syncSharedSkills(packageRoot);
+  const skills = syncSharedSkills(packageRoot, home);
   const instructions = installInstructions(home, runId, Boolean(pi));
-  const backups = [...instructions.backups];
+  const claudeRuntime = installClaudeRuntime(packageRoot, home, runId);
+  const backups = [...instructions.backups, ...claudeRuntime.backups];
   let agents;
 
   if (pi) {
@@ -353,14 +436,23 @@ function setup(options = {}, packageRoot = __dirname) {
     mergeSubagentSettings(path.join(home, ".pi", "agent", "subagents.json"));
   }
 
+  if (currentClaudeText !== mergedClaudeText) {
+    const backup = backupFile(
+      claudeSettingsFile,
+      path.join(home, ".claude", "kirin-backups", runId, "settings"),
+    );
+    if (backup) backups.push(backup);
+    writeFileAtomic(claudeSettingsFile, mergedClaudeText);
+  }
+
   console.log("\nKirin setup complete.");
   console.log(`- ${skills.count} shared core skills installed for all agents`);
-  console.log("- Claude imports the shared AGENTS.md");
+  console.log("- Claude imports shared instructions and uses Kirin's global hooks");
   if (pi) console.log(`- ${formatSyncReport(agents)}`);
   else console.log("- Pi not found in PATH; Pi-specific configuration skipped");
   if (backups.length) console.log(`- ${backups.length} replaced item(s) backed up under your home directory`);
   console.log("\nRestart active agents. Rerun this same command whenever you want to update.");
-  return { dryRun: false, skills, agents, pi: Boolean(pi), backups };
+  return { dryRun: false, skills, agents, pi: Boolean(pi), backups, claudeRuntime: claudeRuntime.runtime };
 }
 
 function run(argv = process.argv.slice(2)) {
@@ -391,6 +483,7 @@ module.exports = {
   findExecutable,
   installBlock,
   installInstructions,
+  mergeClaudeSettings,
   packageActions,
   parse,
   piBinary,

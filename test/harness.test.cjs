@@ -15,7 +15,7 @@ function filesUnder(dir) {
 }
 
 test("executable integration lives at the root with no wrapper directory", () => {
-  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "agent-sync.cjs", "guard-policy.cjs", "setup.cjs"]) {
+  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "agent-sync.cjs", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs"]) {
     assert.equal(fs.existsSync(path.join(root, name)), true, name);
   }
   for (const name of ["harness", "scripts", "intercepted-commands", "context", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
@@ -31,7 +31,7 @@ test("package uses native Pi resources and a strict publication allowlist", () =
   assert.equal(packageJson.bin["kirin-pi"], "./setup.cjs");
   assert.deepEqual(packageJson.files, [
     "agents", "extensions", "hooks", "skills", "docs",
-    "agent-sync.cjs", "guard-policy.cjs", "setup.cjs",
+    "agent-sync.cjs", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs",
     "README.md", "LICENSE", "LICENSE-APACHE",
   ]);
   assert.equal(packageJson.dependencies, undefined);
@@ -46,6 +46,7 @@ test("upstream repository references stay in the ledger except explicit Herdr sy
     ...filesUnder(path.join(root, "hooks")),
     ...filesUnder(path.join(root, "skills")),
     path.join(root, "agent-sync.cjs"),
+    path.join(root, "chatgpt-export.ts"),
     path.join(root, "guard-policy.cjs"),
     path.join(root, "setup.cjs"),
     path.join(root, "AGENTS.md"),
@@ -73,6 +74,16 @@ test("README documents the remote and checkout install sources", () => {
   // `bun run kirin-pi` is the package script; no link step or node_modules required.
   assert.equal(packageJson.scripts["kirin-pi"], "bun setup.cjs");
   assert.equal(packageJson.scripts.link, undefined);
+});
+
+test("README documents Claude native-equivalent boundaries", () => {
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  assert.match(readme, /Claude native equivalents/);
+  assert.match(readme, /~\/\.claude\/settings\.json/);
+  assert.match(readme, /~\/\.claude\/kirin/);
+  assert.match(readme, /\/insights/);
+  assert.match(readme, /provider registration is unsupported/i);
+  assert.match(readme, /MCP|plugin/);
 });
 
 test("required legal and current-truth docs exist", () => {

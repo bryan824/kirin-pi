@@ -14,6 +14,7 @@ const {
   WORKFLOW,
   installBlock,
   installInstructions,
+  mergeClaudeSettings,
   packageActions,
   parse,
   setup,
@@ -25,7 +26,7 @@ const WORKFLOW_SKILLS = [
   "parallel-work", "plan", "prototype", "research", "survey", "verify",
 ];
 const MAINTENANCE_SKILLS = ["project-memory", "session-close", "skill-audit", "write-skill"];
-const SHARED_SKILLS = [...WORKFLOW_SKILLS, ...MAINTENANCE_SKILLS, "herdr"].sort();
+const SHARED_SKILLS = [...WORKFLOW_SKILLS, ...MAINTENANCE_SKILLS, "chatgpt-export", "herdr"].sort();
 
 function tempDir(prefix = "kirin-setup-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -48,6 +49,7 @@ function fixtureCheckout(base) {
   const checkout = path.join(base, "checkout");
   for (const name of WORKFLOW_SKILLS) write(path.join(checkout, "skills", "workflow", name, "SKILL.md"), `---\nname: ${name}\ndescription: test\n---\n`);
   for (const name of MAINTENANCE_SKILLS) write(path.join(checkout, "skills", "maintenance", name, "SKILL.md"), `---\nname: ${name}\ndescription: test\n---\n`);
+  write(path.join(checkout, "skills", "domain", "chatgpt-export", "SKILL.md"), "---\nname: chatgpt-export\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "herdr", "SKILL.md"), "---\nname: herdr\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "rust", "SKILL.md"), "---\nname: rust\ndescription: test\n---\n");
   fs.cpSync(path.join(root, "agents"), path.join(checkout, "agents"), { recursive: true });
@@ -84,7 +86,7 @@ test("each run rebuilds both skill roots from the package alone", () => {
   write(path.join(roots[1], "rust", "SKILL.md"), "---\nname: rust\n---\n");
 
   const first = syncSharedSkills(checkout, home);
-  assert.equal(first.count, 17);
+  assert.equal(first.count, 18);
   for (const dir of roots) {
     assert.deepEqual(fs.readdirSync(dir).sort(), SHARED_SKILLS);
     assert.equal(fs.lstatSync(path.join(dir, "design")).isDirectory(), true);
@@ -96,7 +98,7 @@ test("each run rebuilds both skill roots from the package alone", () => {
   write(path.join(checkout, "skills", "workflow", "design", "updated.txt"), "updated\n");
   fs.rmSync(path.join(checkout, "skills", "workflow", "survey"), { recursive: true });
   const second = syncSharedSkills(checkout, home);
-  assert.equal(second.count, 16);
+  assert.equal(second.count, 17);
   for (const dir of roots) {
     assert.equal(fs.existsSync(path.join(dir, "survey")), false);
     assert.equal(fs.readFileSync(path.join(dir, "design", "updated.txt"), "utf8"), "updated\n");
@@ -189,6 +191,76 @@ test("workflow block replacement is idempotent", () => {
   assert.equal(installBlock(installBlock(existing)), installBlock(existing));
 });
 
+test("Claude settings merge preserves unrelated hooks and is idempotent", () => {
+  const current = {
+    model: "opus",
+    hooks: {
+      PreToolUse: [
+        { matcher: "*", hooks: [{ type: "command", command: "other pre-hook" }] },
+        { matcher: "Bash", hooks: [{ type: "command", command: "bun \"$HOME/.claude/kirin/hooks/claude-guard.cjs\"" }] },
+      ],
+      Stop: [{ matcher: "*", hooks: [{ type: "command", command: "other stop-hook" }] }],
+    },
+  };
+
+  const merged = mergeClaudeSettings(current);
+  assert.equal(merged.model, "opus");
+  assert.deepEqual(merged.hooks.Stop, current.hooks.Stop);
+  assert.equal(JSON.stringify(merged).match(/kirin\/hooks\/claude-guard/g).length, 1);
+  assert.equal(JSON.stringify(merged).match(/kirin\/hooks\/install/g).length, 1);
+  assert.deepEqual(mergeClaudeSettings(merged), merged);
+});
+
+test("invalid Claude settings fail before setup mutates home", () => {
+  for (const [value, message] of [
+    [[], /Claude settings must be a JSON object/],
+    [{ hooks: { PreToolUse: {} } }, /hooks\.PreToolUse must be an array/],
+    [{ hooks: { PreToolUse: [{ matcher: "Bash", hooks: "bad" }] } }, /hook entry must contain a hooks array/],
+    [{ hooks: { PreToolUse: [{ hooks: [null] }] } }, /hook definition must be a JSON object/],
+  ]) {
+    const home = tempDir();
+    const settings = path.join(home, ".claude", "settings.json");
+    write(settings, `${JSON.stringify(value)}\n`);
+    assert.throws(() => setup({ home, pi: null }, root), message);
+    assert.deepEqual(filesUnder(home), [settings]);
+  }
+});
+
+test("setup installs durable Claude hooks and preserves settings through a symlink", () => {
+  const home = tempDir();
+  const managed = path.join(home, "managed", "settings.json");
+  const settings = path.join(home, ".claude", "settings.json");
+  write(managed, JSON.stringify({ theme: "dark", hooks: { Stop: [] } }, null, 2) + "\n");
+  fs.chmodSync(managed, 0o640);
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.symlinkSync(managed, settings);
+
+  const first = setup({ home, pi: null }, root);
+  assert.equal(fs.lstatSync(settings).isSymbolicLink(), true);
+  assert.equal(fs.statSync(managed).mode & 0o777, 0o640);
+  const installed = JSON.parse(fs.readFileSync(managed, "utf8"));
+  assert.equal(installed.theme, "dark");
+  assert.deepEqual(installed.hooks.Stop, []);
+  assert.equal(JSON.stringify(installed).match(/\.claude\/kirin\/hooks/g).length, 2);
+  assert.equal(first.backups.some((file) => file.endsWith("settings.json")), true);
+
+  assert.equal(fs.existsSync(path.join(home, ".agents", "skills", "design", "SKILL.md")), true);
+  const runtime = path.join(home, ".claude", "kirin");
+  for (const file of ["chatgpt-export.ts", "guard-policy.cjs", "hooks/claude-guard.cjs", "hooks/install.cjs"]) {
+    assert.equal(fs.existsSync(path.join(runtime, file)), true, file);
+  }
+  const blocked = spawnSync(process.execPath, [path.join(runtime, "hooks", "claude-guard.cjs")], {
+    input: JSON.stringify({ tool_input: { command: "git add ." } }),
+    encoding: "utf8",
+  });
+  assert.equal(blocked.status, 2);
+  assert.match(blocked.stderr, /Blocked/);
+
+  const second = setup({ home, pi: null }, root);
+  assert.equal(second.backups.length, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(managed, "utf8")), installed);
+});
+
 test("internal dry run mutates neither home nor repository", () => {
   const home = tempDir();
   const before = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
@@ -215,7 +287,7 @@ test("zero-argument CLI installs shared skills and Claude instructions without P
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Pi not found in PATH/);
   assert.equal(fs.existsSync(path.join(home, ".pi")), false);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 18);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
   const claudeAgents = path.join(home, ".claude", "AGENTS.md");
   assert.equal(fs.lstatSync(claudeAgents).isSymbolicLink(), false);
@@ -244,7 +316,7 @@ test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Kirin setup complete/);
   assert.equal(fs.readFileSync(path.join(home, "pi-calls"), "utf8").trim().split("\n").length, 3);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 18);
   assert.equal(fs.readdirSync(path.join(home, ".pi", "agent", "agents")).filter((name) => name.endsWith(".md")).length, 7);
   const reviewerBackups = filesUnder(path.join(home, ".pi", "agent", "kirin-backups"))
     .filter((file) => path.basename(file) === "reviewer.md");
