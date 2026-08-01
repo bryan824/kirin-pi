@@ -73,7 +73,7 @@ const ChatGptExportParams = Type.Object({
 			description: "Maximum messages to include from the export. Defaults to the most recent 100 messages.",
 		}),
 	),
-});
+}, { additionalProperties: false });
 
 function normalizeInputPath(inputPath: string | undefined, cwd: string): string {
 	const rawPath = inputPath?.trim().replace(/^@/, "");

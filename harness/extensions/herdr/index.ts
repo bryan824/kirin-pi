@@ -531,7 +531,7 @@ export default function (pi: ExtensionAPI) {
 			),
 			cwd: Type.Optional(Type.String({ description: "Working directory for workspace_create, tab_create, and pane_split where supported" })),
 			focus: Type.Optional(Type.Boolean({ description: "Explicitly change focus for create/focus actions. Defaults should preserve current focus." })),
-		}),
+		}, { additionalProperties: false }),
 
 		async execute(_toolCallId, params, signal, onUpdate, _ctx) {
 			const currentPane = await getCurrentPaneInfo(signal);
