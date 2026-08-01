@@ -85,15 +85,15 @@ Presets target `@tintinweb/pi-subagents` and use its native model, thinking, iso
 
 | Agent | Model / thinking | Role |
 |---|---|---|
-| `Explore` | `gpt-5.4-mini` / low | Fast hermetic location search; overrides unavailable default Haiku pin. |
-| `codebase-analyzer` | `gpt-5.4-mini` / medium | Deep read-only implementation tracing. |
-| `precedent-locator` | `gpt-5.4-mini` / medium | Git-history and follow-up-fix evidence. |
-| `claim-verifier` | `gpt-5.5` / high | Adversarial claim grounding. |
-| `web-researcher` | `gpt-5.4-mini` / high | Primary-source web research through web tools. |
-| `worker` | `gpt-5.4-mini` / high | One bounded worktree implementation packet. |
-| `reviewer` | `gpt-5.5` / xhigh | Expensive read-only Spec + Standards verdict. |
+| `explore` | `gpt-5.6-luna` / low | Fast hermetic location search. |
+| `codebase-analyzer` | `gpt-5.6-terra` / medium | Deep read-only implementation tracing. |
+| `precedent-locator` | `gpt-5.6-terra` / medium | Git-history and follow-up-fix evidence. |
+| `claim-verifier` | `gpt-5.6-sol` / high | Adversarial claim grounding. |
+| `web-researcher` | `gpt-5.6-terra` / high | Primary-source web research through web tools. |
+| `worker` | `gpt-5.6-terra` / high | One bounded worktree implementation packet. |
+| `reviewer` | `gpt-5.6-sol` / xhigh | Expensive read-only Spec + Standards verdict. |
 
-Built-in `general-purpose` and `Plan` remain available. Global subagent settings use compact tool prose, finite graceful turn limits, schedules off, and transcripts off by default; worker/reviewer opt back in.
+GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for analysis and implementation, Sol for adversarial verification. Built-in `general-purpose` and `Plan` remain available. Global subagent settings use compact tool prose, finite graceful turn limits, schedules off, and transcripts off by default; worker/reviewer opt back in.
 
 ## Install or update
 

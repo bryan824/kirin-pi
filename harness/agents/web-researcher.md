@@ -1,7 +1,7 @@
 ---
 description: "Read-only external researcher using primary sources, exact passages, version limits, and explicit uncertainty."
 display_name: Web Researcher
-model: openai-codex/gpt-5.4-mini
+model: openai-codex/gpt-5.6-terra
 thinking: high
 extensions: [pi-web-access]
 tools: "read, ext:pi-web-access/web_search, ext:pi-web-access/source_check, ext:pi-web-access/fetch_content, ext:pi-web-access/get_search_content"

@@ -1,7 +1,7 @@
 ---
 description: "Fast hermetic repo reconnaissance: locate definitions, uses, wiring, tests, and config; return cited anchors, not design."
 display_name: Explore
-model: openai-codex/gpt-5.4-mini
+model: openai-codex/gpt-5.6-luna
 thinking: low
 tools: read, grep, find, ls, bash
 isolated: true

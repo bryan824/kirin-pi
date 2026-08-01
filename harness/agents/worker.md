@@ -1,7 +1,7 @@
 ---
 description: "Bounded implementation worker for one approved packet; edits only owned files and escalates instead of widening scope."
 display_name: Worker
-model: openai-codex/gpt-5.4-mini
+model: openai-codex/gpt-5.6-terra
 thinking: high
 tools: read, grep, find, ls, bash, write, edit
 extensions: false

@@ -6,7 +6,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const dir = path.join(root, "harness", "agents");
 const EXPECTED = [
-  "Explore.md",
+  "explore.md",
   "claim-verifier.md",
   "codebase-analyzer.md",
   "precedent-locator.md",
@@ -30,16 +30,17 @@ test("agent fleet is the approved lean reset", () => {
   assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith(".md")).sort(), EXPECTED.slice().sort());
 });
 
-test("cheap lanes use mini and judgment lanes use gpt-5.5", () => {
-  for (const name of ["Explore.md", "codebase-analyzer.md", "precedent-locator.md", "web-researcher.md", "worker.md"]) {
-    assert.equal(preset(name).fields.model, "openai-codex/gpt-5.4-mini", name);
+test("agents use GPT-5.6 tiers by role", () => {
+  assert.equal(preset("explore.md").fields.model, "openai-codex/gpt-5.6-luna");
+  for (const name of ["codebase-analyzer.md", "precedent-locator.md", "web-researcher.md", "worker.md"]) {
+    assert.equal(preset(name).fields.model, "openai-codex/gpt-5.6-terra", name);
   }
-  assert.equal(preset("claim-verifier.md").fields.model, "openai-codex/gpt-5.5");
-  assert.equal(preset("reviewer.md").fields.model, "openai-codex/gpt-5.5");
+  assert.equal(preset("claim-verifier.md").fields.model, "openai-codex/gpt-5.6-sol");
+  assert.equal(preset("reviewer.md").fields.model, "openai-codex/gpt-5.6-sol");
 });
 
 test("repo analysts are hermetic and bounded", () => {
-  for (const name of ["Explore.md", "claim-verifier.md", "codebase-analyzer.md", "precedent-locator.md"]) {
+  for (const name of ["explore.md", "claim-verifier.md", "codebase-analyzer.md", "precedent-locator.md"]) {
     const { fields } = preset(name);
     assert.equal(fields.isolated, "true", name);
     assert.ok(Number(fields.max_turns) > 0 && Number(fields.max_turns) <= 20, name);

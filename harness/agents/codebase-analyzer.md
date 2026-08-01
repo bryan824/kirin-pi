@@ -1,7 +1,7 @@
 ---
 description: "Read-only implementation tracer for one component or runtime flow, with precise file:line evidence."
 display_name: Codebase Analyzer
-model: openai-codex/gpt-5.4-mini
+model: openai-codex/gpt-5.6-terra
 thinking: medium
 tools: read, grep, find, ls
 isolated: true

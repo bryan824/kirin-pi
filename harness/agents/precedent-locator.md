@@ -1,7 +1,7 @@
 ---
 description: "Read-only git-history investigator for similar changes, follow-up fixes, blast radius, and evidenced lessons."
 display_name: Precedent Locator
-model: openai-codex/gpt-5.4-mini
+model: openai-codex/gpt-5.6-terra
 thinking: medium
 tools: read, grep, find, ls, bash
 isolated: true
