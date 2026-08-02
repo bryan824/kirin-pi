@@ -12,7 +12,7 @@ kirin-pi/
 ├── extensions/   Pi runtime extensions
 ├── hooks/        Claude and Git hooks
 ├── chatgpt-export.ts  shared parser CLI
-├── setup.cjs     global installer
+├── setup.cjs     installer
 ├── skills/       portable workflow, maintenance, and domain prompts
 ├── docs/         current truth and upstream provenance
 └── test/         repository contracts
@@ -123,26 +123,34 @@ GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for 
 
 ## Install or update
 
-Requires Bun. Scope is always global; there are no subcommands or flags. Same name either way — `bunx` fetches, `bun` uses the checkout you are standing in:
+Requires Bun. A plain command prompts for scope and packs in a TTY; without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Core (the current 18 core skills) is required for global installs. Optional packs are `frontend`, `rust`, `python`, and `teaching`.
 
 ```bash
+# Remote or checkout: prompt in a TTY.
 bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)"
-bun run kirin-pi   # inside a checkout, from the working tree
+bun run kirin-pi
+
+# Noninteractive global frontend or project frontend.
+bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)" --scope global --packs frontend --yes
+bun run kirin-pi --scope project --project . --packs frontend --yes
 ```
 
 Pin a commit rather than a branch. `bunx` caches per source string and resolves each one exactly once, so `#main` keeps serving whatever commit it first saw — neither `--force` nor `--no-cache` re-checks a branch. A commit cannot move, so its cache entry is always right, and resolving the SHA at call time makes the string change whenever `main` does. A checkout has no such problem, so `bun run kirin-pi` needs nothing.
 
-It idempotently:
+### Global scope
 
-- rebuilds `~/.agents/skills` and `~/.claude/skills` from scratch, including the shared ChatGPT export and Herdr skills
+Global setup always owns and replaces both `~/.agents/skills` and `~/.claude/skills`, including the shared ChatGPT export and Herdr skills. It also:
+
 - owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
 - copies Claude runtime files under `~/.claude/kirin/` and idempotently merges only Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
 - backs up changed Claude settings under `~/.claude/kirin-backups/<run>/settings/`; restoring that file disables the managed hooks, after which `~/.claude/kirin/` is inert
 - when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
 
-Both skill roots are Kirin output and are replaced wholesale on every run: nothing placed there by hand survives, so project-specific skills belong under `.agents/skills/` or `.pi/skills/` in the project itself. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
+A global rerun preserves installed optional global packs unless `--packs` explicitly replaces them. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
 
-Rerun the same command whenever you want to update. Domain skills such as Rust, Python tooling, teaching, and the frontend design set remain project opt-in under `.agents/skills/` or `.pi/skills/`.
+### Project scope
+
+Project setup defaults `--project` to the current directory and installs only selected skills to `<project>/.agents/skills`. It is additive: unrelated and unselected skills remain, identical skills are skipped, and differing collisions are confirmed together in one batch. Existing `.agents` paths that resolve outside the project are rejected.
 
 Herdr integration and guidance are included; the Herdr application itself remains a separate system install.
 
