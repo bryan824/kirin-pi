@@ -13,7 +13,7 @@ const DETECTED_ROOTS = [
   "project",
 ];
 const GITIGNORE_MARKER = "# kirin working records";
-const GITIGNORE_BLOCK = `${GITIGNORE_MARKER} — durable truth lives in docs/\n/context/\n/.design/\n`;
+const GITIGNORE_BLOCK = `${GITIGNORE_MARKER} — durable truth lives in docs/\n/context/\n`;
 
 function usage(code = 0) {
   const out = code === 0 ? console.log : console.error;

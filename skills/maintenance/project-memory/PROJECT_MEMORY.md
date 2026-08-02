@@ -36,7 +36,6 @@ context/sessions/      optional
 ```gitignore
 # kirin working records — durable truth lives in docs/
 /context/
-/.design/
 ```
 
 ## Write rules

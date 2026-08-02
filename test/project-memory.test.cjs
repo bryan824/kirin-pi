@@ -44,7 +44,6 @@ test("init creates only current docs and root-anchored ignores", () => {
 
   const ignore = fs.readFileSync(path.join(repo, ".gitignore"), "utf8");
   assert.match(ignore, /^\/context\/$/m);
-  assert.match(ignore, /^\/\.design\/$/m);
   assert.doesNotMatch(ignore, /workflows/);
 });
 

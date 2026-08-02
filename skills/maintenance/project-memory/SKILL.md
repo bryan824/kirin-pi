@@ -14,7 +14,7 @@ bun skills/maintenance/project-memory/scripts/project-memory.cjs check --root <r
 bun skills/maintenance/project-memory/scripts/project-memory.cjs init --root <repo>
 ```
 
-The helper creates only `docs/memory.md`, `docs/verification.md`, and the root gitignore entries for `context/` and `.design/`. Skills create record or substrate paths lazily when they have real content.
+The helper creates only `docs/memory.md`, `docs/verification.md`, and the root gitignore entry for `context/`. Skills create record or substrate paths lazily when they have real content.
 
 Do not migrate, concatenate, or rewrite existing docs automatically. Report legacy or unknown memory roots for a human decision. Preserve current documentation and repository conventions.
 
