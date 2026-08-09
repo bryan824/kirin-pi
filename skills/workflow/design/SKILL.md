@@ -1,6 +1,6 @@
 ---
 name: design
-description: "Before building, or when asked to grill or stress-test an idea — hypothesize the real intent, interview the decision frontier, and resolve goals, non-goals, contracts, and one explicitly approved direction."
+description: "Before building, or when asked to grill or stress-test an idea — hypothesize the real intent, interview the decision frontier, and resolve goals, non-goals, contracts, and one explicitly approved direction; questions only an absent stakeholder can answer become a hand-off questionnaire."
 ---
 
 # Design
@@ -10,9 +10,10 @@ people ask for and what they want differ; the cheapest moment to find the gap is
 before anything exists.
 
 Resist: writing code "to explore" before approval, asking what the repo already
-answers, comparing options when the choice doesn't matter, batching questions
-that reframe each other, accepting a sophistication-signaling answer, treating
-"sounds good" as approval, big-bang slices that can't be reversed.
+answers, grilling the user on what only an absent stakeholder knows, comparing
+options when the choice doesn't matter, batching questions that reframe each
+other, accepting a sophistication-signaling answer, treating "sounds good" as
+approval, big-bang slices that can't be reversed.
 
 - Scale the ceremony to the decision. An unambiguous self-contained ask gets an
   answer, not an interview. This needs a live user: in CI, a scheduled or looped
@@ -22,11 +23,17 @@ that reframe each other, accepting a sophistication-signaling answer, treating
   honest confidence number; below ~70% name what's missing, so they know what the
   interview has to close. Restate the ask as the problem it solves rather than the
   solution it names — "a dashboard" is often "a list".
-- Classify every unknown as a discoverable fact or a decision. Facts come from the
-  repo, docs, and git history; look them up, and dispatch a subagent rather than
-  asking. Do not block on it — a running lookup is just an unsettled prerequisite,
-  so only questions downstream of it wait. Decisions are the user's, except
-  reversible low-impact ones, which are yours to make rather than to ask about.
+- Classify every unknown as a discoverable fact, a decision, or knowledge held by
+  someone not in the room. Facts come from the repo, docs, and git history; look
+  them up, and dispatch a subagent rather than asking. Decisions are the user's,
+  except reversible low-impact ones, which are yours to make rather than to ask
+  about. When an absent stakeholder holds the answer, grill the send, not the
+  subject — the user can always say who it goes to and what they need back — then
+  draft the questionnaire they hand off: one idea per question, most important
+  first because async may get only one pass, an answer stub under each, and
+  partial answers or "I don't know" invited over silence. Either dispatch —
+  subagent or questionnaire — is an unsettled prerequisite, not a blocker; only
+  questions downstream of it wait.
 - Work the decision tree in frontier rounds. The frontier is every decision whose
   prerequisites are settled; ask it in one numbered round, then recompute. A
   question that depends on another still open belongs to a later round. Cap the
@@ -35,8 +42,10 @@ that reframe each other, accepting a sophistication-signaling answer, treating
   would *reframe* the other questions rather than merely unblock them.
 - Attach your guess and the reasoning behind it to every question: reacting to a
   wrong guess is faster than answering cold, and it puts your assumptions where
-  they can be corrected. Guess sometimes in a direction you expect pushback on, so
-  agreement stays informative.
+  they can be corrected. Shape the round for delta replies — a short title per
+  question, the recommendation on its own line, concrete options where the space
+  is enumerable — so "all as recommended except Q3" is a complete answer. Guess
+  sometimes in a direction you expect pushback on, so agreement stays informative.
 - When the shape isn't obvious, diverge before converging: 3–5 variations through
   inversion, constraint removal, radical simplification, and the 10x version,
   grounded in what the repo actually has. Cluster to two or three genuinely
@@ -92,6 +101,7 @@ ambiguous — ask what they would refine. Silence followed by "okay, let's start
 means they gave up on the interview rather than converged — ask what you missed.
 
 Deliver: the approved design summary, contracts and test seams, assumptions with
-their tests, and the exact next route — one bounded outcome to `implement`,
-multi-context implementation to `plan`. Do not write code, scaffold files, or
-produce parallel planning artifacts.
+their tests, any questionnaire still out with a stakeholder, and the exact next
+route — one bounded outcome to `implement`, multi-context implementation to
+`plan`. Do not write code, scaffold files, or produce parallel planning
+artifacts; a stakeholder questionnaire is interview output, not scaffolding.
