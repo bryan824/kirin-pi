@@ -29,7 +29,8 @@ approval, big-bang slices that can't be reversed.
   except reversible low-impact ones, which are yours to make rather than to ask
   about. When an absent stakeholder holds the answer, grill the send, not the
   subject — the user can always say who it goes to and what they need back — then
-  draft the questionnaire they hand off: one idea per question, most important
+  draft the questionnaire they hand off — one document per recipient, every
+  needed answer covered by a question: one idea per question, most important
   first because async may get only one pass, an answer stub under each, and
   partial answers or "I don't know" invited over silence. Either dispatch —
   subagent or questionnaire — is an unsettled prerequisite, not a blocker; only
