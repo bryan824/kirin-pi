@@ -51,6 +51,8 @@ without re-running the failing check.
   finding — hand the architecture gap to `architecture`.
 
 Deliver: the failing signal, the root cause (not the symptom), proof of the fix,
-every probe and throwaway harness removed, and any follow-up it exposed. Log the cause and regression in
+every probe and throwaway harness removed, any follow-up it exposed, and the
+uncommitted candidate handed to `verify` — proving your own fix is not the
+independent review that has to precede a commit. Log the cause and regression in
 `docs/known-issues.md` (committed substrate) only after the fix is proven, creating the minimal
 project-memory structure if the repo lacks it.

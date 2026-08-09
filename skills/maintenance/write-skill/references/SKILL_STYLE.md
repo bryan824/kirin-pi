@@ -39,9 +39,9 @@ A description is one instance of a **context pointer** — a reference held in
 context that names out-of-context material and encodes the condition for reaching
 it. A `references/` link and an `AGENTS.md` line naming a doc are the same object,
 so the same rules bind them: the pointer's *wording*, not its target, decides
-whether the agent reaches the material, which makes a must-have target behind a
-vague pointer a variance bug. Sharpen the wording first and inline the material
-only when sharpening fails. Front-load the triggering word, keep one trigger per
+whether the agent reaches the material, so a must-have target behind a vague
+pointer gets read on some runs and missed on others. Sharpen the wording first and
+inline the material only when sharpening fails. Front-load the triggering word, keep one trigger per
 branch — synonyms renaming a single branch are one branch written twice — and cut
 identity the body already carries.
 
@@ -98,6 +98,13 @@ Carry-forward  one line: what a good result contains + the seam to the next skil
   the positive target so the banned behavior goes unspoken; reserve `Resist:` for
   real discipline slips, and add no nuance clause ("don't X unless Y" reopens it;
   make the exception its own conditional).
+- **Every line survives being read once.** A line a human has to re-read to parse
+  is a line the model parses just as badly — it burns attention on decoding
+  instead of doing. Compressed metaphor, a comparison standing in for an
+  instruction ("X beats Y" instead of "write X"), and a coined term the reader
+  meets for the first time all fail this. Say the instruction plainly, then let a
+  leading word carry it on later mentions. A pretrained word is understood on
+  sight; your own coinage has to be taught before it can be used.
 - **Every line passes "would it do this anyway?"** If yes, cut it. The test is
   model-relative — settle a dispute by running the skill against a no-guidance
   control: if the control doesn't show the failure there's nothing to fix, and
@@ -164,9 +171,9 @@ and mindset:
 - **A real process, not a line.** A few lines of shared posture stay a reference,
   or one owner the others name; promoting them to a skill is the skill-per-noun
   smell.
-- **Portable on both ends:** the called skill is model-invoked like any other —
-  composition rides the situation-first description and `RESOLVER.md`, never
-  harness-only frontmatter.
+- **Portable on both ends:** the called skill is model-invoked like any other, so
+  one skill reaches another through its situation-first description and the
+  workflow routes in `AGENTS.md`, never through harness-only frontmatter.
 
 ## One skill = one mindset
 
@@ -210,7 +217,8 @@ two levers short of user-only:
 User-only works because both targets honor the flag natively: Pi hides the skill
 from the system prompt entirely (name and description), Claude Code drops the
 description and keeps the name. The human then reaches it by `/skill:name` or
-`/name`, and `RESOLVER.md` is the router that remembers it exists. Reserve it for
+`/name`, and the workflow routes in `AGENTS.md` are what remember it exists at
+all — a user-only skill no document points at is unreachable. Reserve it for
 skills that should *never* autofire — side-effecting, expensive, or purely
 hand-driven — not as a budget dodge: the description is *how* the model knows when
 to fire a skill, so hiding it trades context for the skill's own reachability. The

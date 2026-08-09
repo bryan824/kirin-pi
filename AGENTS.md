@@ -27,6 +27,9 @@ Judge the harness, not only the change in front of you, whenever one of these fi
 - A `docs/UPSTREAM_LEDGER.md` revisit trigger fires, or a host release ships a native feature a component was built to work around.
 - The same correction recurs across sessions, or a component stops firing.
 
-Two questions settle it. **Does each piece still earn its keep**, judged per layer against `skill-audit`'s criteria and measured before it is argued. **Does the new thing enter, and where** — fold it into an existing principle first, then a reference, then an existing component; a new skill, agent, extension, or hook is the last rung and claims a whole mindset or capability is missing. Climbing a rung takes evidence that the one below it failed, not a reason it might.
+Two questions settle it:
+
+- **Does each piece still earn its keep?** Judge each layer against `skill-audit`'s criteria, and run its analyzer for evidence before arguing from opinion.
+- **Does the new thing enter, and where?** Try to fold it into an existing principle first, then into a reference, then into an existing component. Adding a new skill, agent, extension, or hook is the last resort, and claims a whole mindset or capability is missing today. Take that step only after a smaller one has been tried and failed.
 
 Record only what changes: current truth in `docs/`, third-party relationships in the ledger, durable lessons folded into the owning skill's principles. A clean verdict is a valid outcome — say it and write nothing, since this repository keeps no evaluation diary.

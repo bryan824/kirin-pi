@@ -13,6 +13,6 @@ Parallelism is a modifier, not a lifecycle stage. Stay single-track unless ready
 - Workers run `implement`, touch only owned files, and stop on ambiguity, overlap, a forbidden-file need, or repeated failure.
 - Use the `worker` preset for worktree-isolated edits and `reviewer` for independent read-only review. Caller chooses foreground/background; do not bake scheduling into the packet.
 - A blocked worker is not re-run unchanged. Change the packet, model tier, or decomposition.
-- Review each unit before parent integration. Workers never merge or push.
+- Run `verify` on each unit before the parent integrates it, using a reviewer that did not write the code. Workers never merge or push.
 
 Deliver: per-unit files, verification, risks, blockers, review verdict, and parent integration decision.

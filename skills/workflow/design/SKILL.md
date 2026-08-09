@@ -27,14 +27,15 @@ approval, big-bang slices that can't be reversed.
   someone not in the room. Facts come from the repo, docs, and git history; look
   them up, and dispatch a subagent rather than asking. Decisions are the user's,
   except reversible low-impact ones, which are yours to make rather than to ask
-  about. When an absent stakeholder holds the answer, grill the send, not the
-  subject — the user can always say who it goes to and what they need back — then
-  draft the questionnaire they hand off — one document per recipient, every
-  needed answer covered by a question: one idea per question, most important
-  first because async may get only one pass, an answer stub under each, and
-  partial answers or "I don't know" invited over silence. Either dispatch —
-  subagent or questionnaire — is an unsettled prerequisite, not a blocker; only
-  questions downstream of it wait.
+  about. Either dispatch, a subagent or a questionnaire, is an unsettled
+  prerequisite rather than a blocker, so only the questions downstream of it wait.
+- When an absent stakeholder holds the answer, interview the user about the
+  hand-off instead of the subject. They can always say who the questions go to and
+  what they need back, even when they cannot answer those questions themselves.
+  Then draft one questionnaire per recipient, covering every answer the user said
+  they needed. Give each question a single idea, order them most important first
+  because an async reply may be the only pass you get, leave an answer stub under
+  each, and invite partial answers and "I don't know" rather than silence.
 - Work the decision tree in frontier rounds. The frontier is every decision whose
   prerequisites are settled; ask it in one numbered round, then recompute. A
   question that depends on another still open belongs to a later round. Cap the
@@ -43,10 +44,11 @@ approval, big-bang slices that can't be reversed.
   would *reframe* the other questions rather than merely unblock them.
 - Attach your guess and the reasoning behind it to every question: reacting to a
   wrong guess is faster than answering cold, and it puts your assumptions where
-  they can be corrected. Shape the round for delta replies — a short title per
-  question, the recommendation on its own line, concrete options where the space
-  is enumerable — so "all as recommended except Q3" is a complete answer. Guess
-  sometimes in a direction you expect pushback on, so agreement stays informative.
+  they can be corrected. Shape the round so the user can answer by exception: give
+  each question a short title, put your recommendation on its own line, and offer
+  concrete options where the choices can be listed — then "all as recommended
+  except Q3" is a complete reply. Guess sometimes in a direction you expect
+  pushback on, so agreement stays informative.
 - When the shape isn't obvious, diverge before converging: 3–5 variations through
   inversion, constraint removal, radical simplification, and the 10x version,
   grounded in what the repo actually has. Cluster to two or three genuinely
@@ -72,8 +74,8 @@ approval, big-bang slices that can't be reversed.
 - Settle contracts, data models, error modes, and test seams before implementation.
   Name three kinds of assumption: what you are betting is true but haven't
   validated and how to test it, what would kill the design outright, and what you
-  are deliberately ignoring and why that is fine for now. Deform the design to
-  survive a load-bearing one.
+  are deliberately ignoring and why that is fine for now. Reshape the design so
+  that a load-bearing assumption turning out false does not sink it.
 - Shape work as vertical outcomes, each independently verifiable and reversible,
   riskiest proof first. Follow existing patterns, YAGNI ruthlessly, and leave
   unrelated refactoring alone. Expose likely file-ownership conflicts, but leave

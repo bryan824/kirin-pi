@@ -23,10 +23,14 @@ procedure and fill-in forms, duplicate bodies across skills.
   *seam*, *fog of war*) that anchors a behavior in few tokens; make each
   done-condition checkable, not vague. Failure modes and the full vocabulary live
   in `references/SKILL_STYLE.md`.
+- Write every line to survive one reading. A sentence a human must re-read to
+  parse costs the model the same attention, so state the instruction plainly
+  rather than as a compressed metaphor, a comparison ("X beats Y"), or a term you
+  coined in that sentence.
 - Factor shared ideas into one reference; each skill adds only its delta. Shared
   *behavior* factors the sibling way: a real process with two or more hosts
-  becomes a skill the others call as a subroutine — a seam that resumes, not
-  transitions — while a few lines of posture stay a reference.
+  becomes a skill the others call as a subroutine, returning to its caller
+  instead of handing the work on — while a few lines of posture stay a reference.
 - Skills must not grow monotonically: fold a new lesson into an existing
   principle rather than appending a rule; collapsing specifics back into
   principles is maintenance, not loss. Compressing or absorbing a skill runs

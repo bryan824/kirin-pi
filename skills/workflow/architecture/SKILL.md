@@ -16,7 +16,7 @@ For either posture:
 
 - Read current docs, contracts, tests, consumers, and recent friction before judging structure.
 - Separate real constraints from inertia. Public promises, persisted data, compliance, and explicit user direction are real; internal callers and stale layouts are movable.
-- Judge interfaces by what callers must know versus behavior hidden behind them — everything a caller must know counts, invariants, ordering, error modes and all, not just the type signature. Depth is a property of the interface, never of the implementation: deep does not mean monolithic, and private seams are fine. Depth pays out as leverage for callers and locality for maintainers; name which one a candidate buys.
+- Judge interfaces by what callers must know versus behavior hidden behind them — everything a caller must know counts, invariants, ordering, error modes and all, not just the type signature. Depth is a property of the interface, never of the implementation: deep does not mean monolithic, and private seams are fine. Depth gives callers leverage, meaning more behavior per unit of interface they must learn, and gives maintainers locality, meaning changes and bugs concentrate in one place. Say which of the two a candidate delivers.
 - The interface is also the test surface, since callers and tests cross the same seam. Wanting to test past an interface means the module is the wrong shape — that is a design finding, not a testing problem.
 - Apply the deletion test: if removing a layer removes complexity, delete it; if complexity leaks into callers, deepen the boundary.
 - Add a seam only where something truly varies. One adapter is usually indirection; two real implementations make a boundary.
