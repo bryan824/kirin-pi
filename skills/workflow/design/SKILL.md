@@ -79,7 +79,9 @@ approval, big-bang slices that can't be reversed.
   unrelated refactoring alone. Expose likely file-ownership conflicts, but leave
   stable IDs and blocker edges to `plan`. Offer an ADR under `docs/decisions/` only
   when the decision is hard to reverse, surprising without context, and a real
-  trade-off; a paragraph recording what and why beats a filled-in template.
+  trade-off; write it as a paragraph naming what was decided and why, earning a
+  section for rejected alternatives or consequences only where those must outlive
+  the decision itself.
 
 Route out when the question stops being yours: a structural target to
 `architecture`, an external fact to `research`, and a decision route too large for

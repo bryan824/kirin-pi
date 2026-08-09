@@ -1,6 +1,6 @@
 ---
 name: skill-audit
-description: "Audit loaded skill roots and surrounding agent configuration for overlap, unused prompts, source drift, instruction conflicts, and prompt-budget waste."
+description: "When a harness needs judging rather than using — measure its skills, agents, extensions, and hooks for overlap, unused prompts, source drift, instruction conflicts, and prompt-budget waste."
 ---
 
 # Skill Audit
@@ -28,6 +28,20 @@ Then inspect what the analyzer cannot prove:
 - package, hook, extension, permission, and agent-preset conflicts
 - stale project memory naming files or commands that no longer exist
 - native package resources versus optional flattened cross-agent copies
+
+Each layer earns its keep differently, so judge each on its own test — and against
+the host's current native features, since a component built to work around a gap
+becomes waste the release that closes it:
+
+- **Skill** — fires on the turns it claims, and carries what the model would not
+  do unguided. One that never fires is dead weight whatever its quality.
+- **Agent preset** — holds a role the fleet cannot already cover, and returns
+  evidence the parent could not have gathered inline.
+- **Extension / hook** — owns tooling around state (commands, UI, gates,
+  lifecycle) rather than reasoning a skill should carry, and stays one shared
+  piece rather than one per caller.
+- **Doc** — states truth the environment cannot be asked for. Anything a script,
+  config, or `--help` already answers is a cache that will go stale.
 
 Current config and command output outrank memory. Deployed copies are outputs, never editing targets. Suggest changes before deleting untracked user skills.
 
