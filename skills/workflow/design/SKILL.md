@@ -61,11 +61,13 @@ approval, big-bang slices that can't be reversed.
   design partner is not a yes-machine.
 - Pin measurable goals ("faster" → a number to hit) and non-goals *with their
   reasons* — focus is saying no to good ideas, and half of misalignment is silent
-  disagreement about what isn't being built. Read `docs/glossary.md` when present,
-  challenge overloaded or conflicting terms, and update it inline, free of
-  implementation detail. Across bounded contexts, say which context owns a term and
-  record cross-context relationships instead of flattening them. Force precision
-  with concrete data scenarios, not abstractions.
+  disagreement about what isn't being built. Keep `docs/glossary.md` honest inline
+  as terms resolve — read it when present, create it at the first resolved term,
+  challenge overloaded or conflicting terms, and record each winner with the
+  synonyms to avoid; project concepts only, free of implementation detail. Across
+  bounded contexts, say which context owns a term and record cross-context
+  relationships instead of flattening them. Force precision with invented concrete
+  scenarios that probe the boundary between neighboring terms, not abstractions.
 - Settle contracts, data models, error modes, and test seams before implementation.
   Name three kinds of assumption: what you are betting is true but haven't
   validated and how to test it, what would kill the design outright, and what you
@@ -76,7 +78,7 @@ approval, big-bang slices that can't be reversed.
   unrelated refactoring alone. Expose likely file-ownership conflicts, but leave
   stable IDs and blocker edges to `plan`. Offer an ADR under `docs/decisions/` only
   when the decision is hard to reverse, surprising without context, and a real
-  trade-off.
+  trade-off; a paragraph recording what and why beats a filled-in template.
 
 Route out when the question stops being yours: a structural target to
 `architecture`, an external fact to `research`, and a decision route too large for
