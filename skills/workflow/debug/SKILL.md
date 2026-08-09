@@ -5,24 +5,25 @@ description: "A check fails or behavior is wrong and the cause isn't obvious —
 
 # Debug
 
-Find the cause before changing code. A bug you can't reproduce you can't fix; a
-fix you can't prove you haven't made.
+Find the cause before changing code. A bug you can't reproduce you can't fix;
+a fix without proof is not a fix.
 
 Resist: patching the symptom, changing several things at once, calling it fixed
 without re-running the failing check.
 
-- Reproduce first — a fast, deterministic pass/fail signal that asserts the user's
-  exact symptom (not merely "runs without erroring"), run once to watch it go red,
-  is most of the fix; bisection, hypotheses, and instrumentation all just consume
-  it. For an intermittent bug the goal is a higher reproduction rate rather than a
-  clean repro — a 50% flake is debuggable, 1% is not. If you can't build one, stop
+- Reproduce first — build a fast, deterministic pass/fail signal that asserts the
+  user's exact symptom (not merely "runs without erroring") and run it once to
+  watch it fail. That signal is most of the fix; bisection, hypotheses, and
+  instrumentation all just consume it. For an intermittent bug the goal is a
+  higher reproduction rate rather than a clean repro — a 50% flake is debuggable, 1% is not. If you can't build one, stop
   and ask for artifacts (logs, traces, a recording) instead of hypothesizing blind.
 - Once it goes red, shrink the repro until every remaining element is load-bearing
-  and removing any one turns it green. That cut is what collapses the hypothesis
-  space, and what the regression test is made from.
+  and removing any one turns it green. That minimal repro is what collapses the
+  hypothesis space, and what the regression test is made from.
 - Redact secrets from every command, output, and captured artifact you show,
-  writing `<REDACTED>` in their place, and build loops against env vars so the
-  credential stays in the environment. Traces carry auth headers — quote only the
+  writing `<REDACTED>` in their place, and reference credentials through
+  environment variables so the value stays out of command text. Traces carry auth
+  headers — quote only the
   lines carrying signal. Say so when redacted evidence is no longer enough to
   diagnose.
 - For a regression with a known-good version, read `git diff <last-good>..HEAD` of
@@ -35,9 +36,9 @@ without re-running the failing check.
   re-rank it instantly from what they shipped last week. Then one hypothesis, one
   change at a time.
 - Tag every debug probe with a unique prefix (`[DEBUG-a4f2]`) so removing them is
-  one grep — untagged probes survive into main. One breakpoint beats ten logs, and
-  a performance regression wants a measured baseline and a bisect rather than
-  logging at all.
+  one grep — untagged probes survive into main. Use a breakpoint instead of
+  adding log statements when stepping through code. For a performance regression,
+  measure a baseline and bisect rather than logging.
 - Three failed fixes is a circuit breaker: stop patching — the diagnosis or the
   architecture is wrong. Hand off what you know: hypotheses tested, ruled out,
   evidence, unknowns.

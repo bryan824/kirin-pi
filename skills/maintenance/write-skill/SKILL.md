@@ -28,9 +28,9 @@ procedure and fill-in forms, duplicate bodies across skills.
   rather than as a compressed metaphor, a comparison ("X beats Y"), or a term you
   coined in that sentence.
 - Factor shared ideas into one reference; each skill adds only its delta. Shared
-  *behavior* factors the sibling way: a real process with two or more hosts
-  becomes a skill the others call as a subroutine, returning to its caller
-  instead of handing the work on — while a few lines of posture stay a reference.
+  *behavior* factors differently: a real process with two or more hosts becomes a
+  skill the others call as a subroutine, returning to its caller instead of
+  handing the work on — while a few lines of posture stay a reference.
 - Skills must not grow monotonically: fold a new lesson into an existing
   principle rather than appending a rule; collapsing specifics back into
   principles is maintenance, not loss. Compressing or absorbing a skill runs
@@ -38,14 +38,14 @@ procedure and fill-in forms, duplicate bodies across skills.
   non-obvious instruction into a principle, never drop it. (References load on
   demand; trimming them saves nothing.)
 - State is usually just files; reach for an extension or `session_start` hook
-  only for tooling around them (commands, UI, gates, lifecycle) — usually one
-  shared one, not per skill. Default to model-invoked with a tight trigger and
-  body gate. Reserve standard `disable-model-invocation: true` for genuinely
+  only for tooling around them (commands, UI, gates, lifecycle) — usually a
+  single shared extension, not one per skill. Default to model-invoked with a
+  tight trigger and body gate. Reserve standard `disable-model-invocation: true` for genuinely
   hand-driven orchestrators that must never autofire; Pi and Claude both honor
   it, but it also prevents other skills from reaching that entry directly.
 - Suggest cleanup before editing or deleting anything.
 
-Shape what's actually missing in `design` before adding a new skill. Full guide
+Use `design` to shape what's actually missing before adding a new skill. Full guide
 and examples: `references/SKILL_STYLE.md`. Project-memory protocol:
 `../project-memory/PROJECT_MEMORY.md`. After writing, run `skill-audit` for
 collection-wide collisions, drift, use, and prompt budget.

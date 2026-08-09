@@ -16,7 +16,7 @@ other, accepting a sophistication-signaling answer, treating "sounds good" as
 approval, big-bang slices that can't be reversed.
 
 - Scale the ceremony to the decision. An unambiguous self-contained ask gets an
-  answer, not an interview. This needs a live user: in CI, a scheduled or looped
+  answer, not an interview. This needs a live user. In CI, a scheduled or looped
   run, or any autonomous context, report the underspecification as a blocker
   instead of guessing through it.
 - Open with a one-sentence hypothesis of what the user actually wants and an
@@ -24,11 +24,11 @@ approval, big-bang slices that can't be reversed.
   interview has to close. Restate the ask as the problem it solves rather than the
   solution it names — "a dashboard" is often "a list".
 - Classify every unknown as a discoverable fact, a decision, or knowledge held by
-  someone not in the room. Facts come from the repo, docs, and git history; look
-  them up, and dispatch a subagent rather than asking. Decisions are the user's,
-  except reversible low-impact ones, which are yours to make rather than to ask
-  about. Either dispatch, a subagent or a questionnaire, is an unsettled
-  prerequisite rather than a blocker, so only the questions downstream of it wait.
+  someone not in the room. Facts come from the repo, docs, and git history;
+  dispatch a subagent to look them up rather than asking the user. Decisions are
+  the user's, except reversible low-impact ones, which are yours to make rather
+  than to ask about. A dispatched subagent or questionnaire is an open
+  prerequisite, not a blocker — only questions that depend on its answer wait.
 - When an absent stakeholder holds the answer, interview the user about the
   hand-off instead of the subject. They can always say who the questions go to and
   what they need back, even when they cannot answer those questions themselves.
@@ -37,11 +37,12 @@ approval, big-bang slices that can't be reversed.
   because an async reply may be the only pass you get, leave an answer stub under
   each, and invite partial answers and "I don't know" rather than silence.
 - Work the decision tree in frontier rounds. The frontier is every decision whose
-  prerequisites are settled; ask it in one numbered round, then recompute. A
-  question that depends on another still open belongs to a later round. Cap the
-  round at what the user can actually react to — highest leverage first, defer the
-  rest; a round they skim is worse than two rounds. Ask alone only when an answer
-  would *reframe* the other questions rather than merely unblock them.
+  prerequisites are settled; present them in one numbered round, then recompute.
+  A question that depends on an answer still open belongs to a later round. Cap
+  the round at what the user can actually react to — highest leverage first, defer
+  the rest; a round they skim is worse than two rounds. Ask a question on its own
+  only when its answer would *reframe* the other questions rather than merely
+  unblock them.
 - Attach your guess and the reasoning behind it to every question: reacting to a
   wrong guess is faster than answering cold, and it puts your assumptions where
   they can be corrected. Shape the round so the user can answer by exception: give
@@ -64,7 +65,7 @@ approval, big-bang slices that can't be reversed.
   design partner is not a yes-machine.
 - Pin measurable goals ("faster" → a number to hit) and non-goals *with their
   reasons* — focus is saying no to good ideas, and half of misalignment is silent
-  disagreement about what isn't being built. Keep `docs/glossary.md` honest inline
+  disagreement about what isn't being built. Keep `docs/glossary.md` current
   as terms resolve — read it when present, create it at the first resolved term,
   challenge overloaded or conflicting terms, and record each winner with the
   synonyms to avoid; project concepts only, free of implementation detail. Across
@@ -77,7 +78,7 @@ approval, big-bang slices that can't be reversed.
   are deliberately ignoring and why that is fine for now. Reshape the design so
   that a load-bearing assumption turning out false does not sink it.
 - Shape work as vertical outcomes, each independently verifiable and reversible,
-  riskiest proof first. Follow existing patterns, YAGNI ruthlessly, and leave
+  riskiest first. Follow existing patterns, YAGNI ruthlessly, and leave
   unrelated refactoring alone. Expose likely file-ownership conflicts, but leave
   stable IDs and blocker edges to `plan`. Offer an ADR under `docs/decisions/` only
   when the decision is hard to reverse, surprising without context, and a real

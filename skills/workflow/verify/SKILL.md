@@ -48,7 +48,7 @@ or manufacturing findings.
   changelog, not the semver; review the lockfile/transitive diff; prefer one
   dependency per change; thin test coverage around the dependency is itself a
   finding.
-- After a pattern fix, sweep siblings and disposition each match as fixed, safe
+- After a pattern fix, sweep siblings and classify each match as fixed, safe
   (why), or flagged. Before unifying an outlier, read why it diverged. List code
   the change orphaned as findings rather than deleting it silently.
 - Calibrate: a clean review is valid. Lead with correctness/security, then
@@ -65,7 +65,8 @@ or manufacturing findings.
 - Emit `VERDICT: FAIL` when either axis has a required fix or real checks fail;
   `VERDICT: PASS_WITH_RISKS` only for explicit non-blocking risks; otherwise
   `VERDICT: PASS`. Only a pass or user-accepted risks hand the dirty tree to
-  `commit` — verification readiness is not commit grouping.
+  `commit` — how you group changes for verification is separate from how you
+  group them for commits.
 
 Deliver: verdict, fixed point/candidate scope, `## Spec`, `## Standards`, commands
 run, required fixes, risks, and next seam. Record stable verification commands,

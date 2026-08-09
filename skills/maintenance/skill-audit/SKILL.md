@@ -31,14 +31,14 @@ Then inspect what the analyzer cannot prove:
 
 Each layer earns its keep differently, so judge each on its own test — and against
 the host's current native features, since a component built to work around a gap
-becomes waste the release that closes it:
+becomes waste when the host release closes it:
 
 - **Skill** — fires on the turns it claims, and carries what the model would not
   do unguided. One that never fires is dead weight whatever its quality.
 - **Agent preset** — holds a role the fleet cannot already cover, and returns
   evidence the parent could not have gathered inline.
 - **Extension / hook** — owns tooling around state (commands, UI, gates,
-  lifecycle) rather than reasoning a skill should carry, and stays one shared
+  lifecycle) rather than reasoning that a skill should carry, and stays one shared
   piece rather than one per caller.
 - **Doc** — states truth the environment cannot be asked for. Anything a script,
   config, or `--help` already answers is a cache that will go stale.

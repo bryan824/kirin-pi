@@ -41,9 +41,9 @@ it. A `references/` link and an `AGENTS.md` line naming a doc are the same objec
 so the same rules bind them: the pointer's *wording*, not its target, decides
 whether the agent reaches the material, so a must-have target behind a vague
 pointer gets read on some runs and missed on others. Sharpen the wording first and
-inline the material only when sharpening fails. Front-load the triggering word, keep one trigger per
-branch — synonyms renaming a single branch are one branch written twice — and cut
-identity the body already carries.
+inline the material only when sharpening fails. Front-load the triggering word,
+keep one trigger per branch — synonyms for one branch are one branch written
+twice — and remove from the pointer whatever the body already conveys.
 
 Every pointer spends one of two budgets. **Context load** is what always-loaded
 material costs the model — a description, an `AGENTS.md` line — paid every turn
@@ -85,9 +85,10 @@ Carry-forward  one line: what a good result contains + the seam to the next skil
   model shape it. Use a rigid output schema only when something downstream parses
   it — then say so, and explain why. Two properties make a done-condition a lever:
   **clarity**, so the model can tell done from not-done, and **demand**, how much
-  the bound requires. Demand drives the legwork inside the step and binds flat
-  reference as readily as a sequence — "every rule applied" is a bar, "every
-  modified file accounted for" is a bar, "produce a change list" is not.
+  the bound requires. Demand drives the legwork inside the step, and a
+  non-sequential reference creates just as much demand as a sequence of steps —
+  "every rule applied" is a bar, "every modified file accounted for" is a bar,
+  "produce a change list" is not.
 - **Match the form to the failure.** How you write a line depends on how the model
   fails here. Wrong-*shaped* output (bloated, buried, restated) wants a positive
   recipe — name what the output is, in order. An omission wants a structural slot in
@@ -108,13 +109,14 @@ Carry-forward  one line: what a good result contains + the seam to the next skil
 - **Every line passes "would it do this anyway?"** If yes, cut it. The test is
   model-relative — settle a dispute by running the skill against a no-guidance
   control: if the control doesn't show the failure there's nothing to fix, and
-  outputs that converge across a few reps mean the wording binds (five readings of
-  one line mean it doesn't). It also grades whether a leading word earns its
-  repetitions.
+  outputs that converge across a few reps mean the wording binds — but a line
+  that takes multiple readings to understand does not bind, it confuses. It also
+  grades whether a leading word earns its repetitions.
 - **Absorbing or compressing a skill runs that test in reverse.** Every *cut*
   must pass "would it do this anyway?" too. A non-obvious instruction the model
-  wouldn't reach alone — make quiz answers the same length so formatting leaks
-  no tell; cite every claim — gets folded into a principle, never dropped. The
+  wouldn't reach alone gets folded into a principle, never dropped — examples:
+  make quiz answers the same length so formatting leaks no tell; cite every
+  claim. The
   failure mode of absorption is not only bloat (restated competence); it is
   quietly losing the one line that was the point. References load on demand, so
   trimming them buys almost no budget — spend compression on the body and leave
@@ -159,8 +161,9 @@ Repetition between skills is a smell — the shared idea wants to be factored ou
 
 Those bullets factor shared *knowledge* into a reference. Shared *behavior* — the
 same process run step by step in several skills — factors the other way: into a
-skill the hosts call as a **subroutine**, a seam that *resumes* rather than the
-usual terminal seam (`verify` → `commit`). The called skill stays the single
+skill the hosts call as a **subroutine**, returning control to its caller rather
+than handing off permanently like a terminal seam (`verify` → `commit`). The
+called skill stays the single
 source of that behavior; each host adds only the delta around the call. Hold it to
 a higher bar than a reference, since a subroutine skill carries its own description
 and mindset:

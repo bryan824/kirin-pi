@@ -16,9 +16,9 @@ from the contract, large noisy diffs, skipping the verification.
   are done. If neither exists — a bare "just build X" — stop and route to
   `design`; don't invent the scope. For a ticket, reread its approved graph/spec
   and claim it before edits.
-- One plan unit only; stop before the next. A direct one-context design may
-  continue in that context; every later unit starts fresh from the approved plan
-  plus that unit. Use `session-close` when another session must resume it.
+- One plan unit only; stop before the next. A design approved in this same
+  session may continue here; every later unit starts fresh from the approved
+  plan plus that unit. Use `session-close` when another session must resume it.
 - Smallest safe change that satisfies the slice; preserve behavior unless told
   otherwise. Before new code or a new dependency, reach in order for: something
   already in this codebase, the stdlib, a native platform feature, an

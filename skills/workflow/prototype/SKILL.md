@@ -5,8 +5,8 @@ description: "When one design question needs runnable evidence — build throwaw
 
 # Prototype
 
-A prototype is throwaway code that answers a question, and the question decides the
-shape. Getting the branch wrong wastes the whole prototype.
+A prototype is throwaway code that answers a question, and the question decides
+the shape. Picking the wrong type wastes the whole prototype.
 
 Resist: production polish, persistence, abstractions, and leaving the prototype to
 rot in the repo once it has answered its question.
