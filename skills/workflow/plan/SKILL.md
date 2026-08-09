@@ -18,7 +18,9 @@ Write one `context/plans/<slug>.md` using `PLAN_TEMPLATE.md`:
 - risks and rollback
 - stable work-unit IDs with outcomes, blockers, owned files, and verification
 
-Keep work units vertical and independently verifiable. For wide migrations use expand → migrate → contract. Name overlapping file ownership; overlapping units must serialize.
+Keep work units vertical and independently verifiable. For wide migrations use expand → migrate → contract. Name overlapping file ownership; overlapping units must serialize. Where a unit would be easier after a preparatory move, sequence that prefactor as its own earlier unit — make the change easy, then make the easy change.
+
+State each unit as the end-to-end behavior it delivers rather than a layer-by-layer edit list, and keep code snippets out; they go stale faster than the plan. The exception is a snippet from `prototype` that encodes a decision more precisely than prose can — a state machine, reducer, schema, or type shape — trimmed to the decision-rich part and marked as the prototype's verdict.
 
 Markdown owns intent and dependency structure only. Do not record mutable claims, retries, owners, or completion status in the plan; host task/runtime tools own execution state.
 

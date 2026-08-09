@@ -27,9 +27,11 @@ or manufacturing findings.
   reviewers in parallel when available (otherwise make two separate passes):
   - **Spec** — missing/partial requirements, incorrect behavior, scope creep,
     contracts, acceptance, tests, and docs.
-  - **Standards** — documented repo rules first, then judgmental code-smell,
-    complexity, reliability, security, and maintainability findings. Repo rules
-    override generic taste; skip anything tooling already enforces.
+  - **Standards** — documented repo rules first, then the named smell baseline in
+    `references/SMELLS.md` (paste it into an independent reviewer's brief, which
+    can't reach it otherwise), then complexity, reliability, security, and
+    maintainability findings. Repo rules override generic taste; skip anything
+    tooling already enforces.
   Preserve the two reports under separate headings before the combined verdict so
   one axis cannot hide the other.
 - Prefer executable checks over inspection. Distrust skipped jobs, empty

@@ -35,6 +35,23 @@ in `references/`, read only when needed. Pay tokens when relevant, not before.
 Within a file, co-locate: keep a concept's definition, rules, and caveats under one
 heading rather than scattered, so reading one part brings its neighbors with it.
 
+A description is one instance of a **context pointer** — a reference held in
+context that names out-of-context material and encodes the condition for reaching
+it. A `references/` link and an `AGENTS.md` line naming a doc are the same object,
+so the same rules bind them: the pointer's *wording*, not its target, decides
+whether the agent reaches the material, which makes a must-have target behind a
+vague pointer a variance bug. Sharpen the wording first and inline the material
+only when sharpening fails. Front-load the triggering word, keep one trigger per
+branch — synonyms renaming a single branch are one branch written twice — and cut
+identity the body already carries.
+
+Every pointer spends one of two budgets. **Context load** is what always-loaded
+material costs the model — a description, an `AGENTS.md` line — paid every turn
+whether or not it fires. **Cognitive load** is what it costs the human: which
+documents exist and when to reach for each, with the human as the index. Only the
+first is worth minimizing outright; cognitive load is the price of human agency,
+so spend it where human judgment matters and remove it where it does not.
+
 ## Description: situation first
 
 Lead with the situation, then what the skill does, then the few discriminating
@@ -66,17 +83,21 @@ Carry-forward  one line: what a good result contains + the seam to the next skil
   patching") — then state the order as the point.
 - **Outcomes, not output forms.** Name what a good result contains and let the
   model shape it. Use a rigid output schema only when something downstream parses
-  it — then say so, and explain why. Make the done-condition *checkable* and, where
-  it matters, *exhaustive* ("every modified file accounted for," not "a change
-  list") — a vague bound invites stopping early.
+  it — then say so, and explain why. Two properties make a done-condition a lever:
+  **clarity**, so the model can tell done from not-done, and **demand**, how much
+  the bound requires. Demand drives the legwork inside the step and binds flat
+  reference as readily as a sequence — "every rule applied" is a bar, "every
+  modified file accounted for" is a bar, "produce a change list" is not.
 - **Match the form to the failure.** How you write a line depends on how the model
   fails here. Wrong-*shaped* output (bloated, buried, restated) wants a positive
   recipe — name what the output is, in order. An omission wants a structural slot in
   a template. Context-dependent behavior wants a conditional on an observable
   predicate. A prohibition ("don't X") is the weakest tool for *shaping* — under a
-  competing incentive the model negotiates with it — so reserve `Resist:` for real
-  discipline slips, and add no nuance clause ("don't X unless Y" reopens it; make the
-  exception its own conditional).
+  competing incentive the model negotiates with it, and naming the banned behavior
+  drags it into context where it becomes *more* available rather than less. Prompt
+  the positive target so the banned behavior goes unspoken; reserve `Resist:` for
+  real discipline slips, and add no nuance clause ("don't X unless Y" reopens it;
+  make the exception its own conditional).
 - **Every line passes "would it do this anyway?"** If yes, cut it. The test is
   model-relative — settle a dispute by running the skill against a no-guidance
   control: if the control doesn't show the failure there's nothing to fix, and
@@ -122,6 +143,12 @@ Repetition between skills is a smell — the shared idea wants to be factored ou
   State it in a skill only where it carries real signal — "a good
   independent-review candidate," "a subagent returns evidence, not decisions."
   Otherwise omit it.
+- The **environment** is a source of truth too — `package.json` scripts, config
+  files, the directory layout, `--help` output — so a document restating it is a
+  **cache**, earning its load only when the lookup is expensive. Cache what the
+  model cannot find by looking: the unwritten convention, the reason behind a
+  choice, the gotcha no config confesses. Leave one-command lookups to the
+  environment, where they cannot go stale.
 
 Those bullets factor shared *knowledge* into a reference. Shared *behavior* — the
 same process run step by step in several skills — factors the other way: into a
@@ -209,8 +236,11 @@ Named diagnostics for what goes wrong in a skill — the shared vocabulary
 `skill-audit` points at:
 
 - **Premature completion** — ending a step before it's done, attention slipping to
-  *being done*. Sharpen the completion criterion first (cheap, local); only split to
-  hide later steps if the bound is irreducibly fuzzy *and* you observe the rush.
+  *being done*, pulled by the later steps still visible ahead. Sharpen the
+  completion criterion first (cheap, local); only split to hide later steps if the
+  bound is irreducibly fuzzy *and* you observe the rush. Hiding works only across a
+  real context boundary — a hand-off or a subagent dispatch — since an inline call
+  leaves those steps in context and clears nothing.
 - **Sediment** — stale layers that settle because adding feels safe and removing
   risky. The default fate of any skill without a pruning discipline.
 - **Sprawl** — simply too long, even when every line is live and unique. Cure with

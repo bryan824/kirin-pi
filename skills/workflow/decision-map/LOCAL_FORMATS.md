@@ -36,7 +36,7 @@ Status: mapping | ready-for-plan | superseded
 ```markdown
 # DNN — <title>
 
-Type: design | research | prototype
+Type: design | research | prototype | task
 Blocked by: none | <stable IDs>
 
 ## Question
