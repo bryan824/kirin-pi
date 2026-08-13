@@ -28,4 +28,4 @@ The file starts `Status: DRAFT`. Audit every source decision and placeholder, th
 
 If implementation reality contradicts the plan, stop and amend the plan. Do not silently adapt.
 
-Deliver: approved plan path, ready work-unit frontier, test seams, and next route (`implement` for one unit, `parallel-work` only for ready file-disjoint units). Stable runtime work keys equal plan unit IDs. Stop.
+Deliver: approved plan path, ready work-unit frontier, test seams, and next route (`implement` for one unit; the active orchestration runtime for ready file-disjoint units). Stable runtime work keys equal plan unit IDs. Stop.

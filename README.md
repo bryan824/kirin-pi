@@ -30,7 +30,7 @@ large: design | decision-map -> plan -> implement -> verify -> commit
 bug:   debug -> verify -> commit
 ```
 
-`survey`, `research`, and `prototype` gather different evidence. `architecture` chooses structure. `parallel-work` owns the portable packet/review contract for ready file-disjoint work; the installed orchestration runtime supplies concrete syntax, isolation, durable-run, and escalation mechanics.
+`survey`, `research`, and `prototype` gather different evidence. `architecture` chooses structure. Ready file-disjoint plan units may use the installed orchestration runtime; shared files or contracts force serialization.
 
 ### Workflow skills
 
@@ -41,8 +41,7 @@ bug:   debug -> verify -> commit
 | `debug` | Reproduce, isolate root cause, fix narrowly, prove it. |
 | `decision-map` | Resolve a multi-session decision frontier before planning. |
 | `design` | Set goals, non-goals, contracts, trade-offs, and explicit approval. |
-| `implement` | Build one approved outcome or plan unit. |
-| `parallel-work` | Fan ready file-disjoint packets across isolated workers and reviewers without naming a runtime. |
+| `implement` | Build one approved outcome or delegated plan unit within its file boundaries. |
 | `plan` | Produce one approved intent + blocker graph artifact. |
 | `prototype` | Answer one logic question or compare divergent UI variants, then delete the harness. |
 | `research` | Answer one external question from primary sources. |
@@ -123,7 +122,7 @@ GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for 
 
 ## Install or update
 
-Requires Bun. A plain command prompts for scope; project scope then prompts for optional packs. Without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Global scope installs the current 18 core skills only. Project scope installs selected optional packs only: `frontend`, `rust`, `python`, and `teaching`.
+Requires Bun. A plain command prompts for scope; project scope then prompts for optional packs. Without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Global scope installs the current 17 core skills only. Project scope installs selected optional packs only: `frontend`, `rust`, `python`, and `teaching`.
 
 ```bash
 # Remote or checkout: prompt in a TTY.

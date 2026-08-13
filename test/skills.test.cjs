@@ -10,7 +10,7 @@ const ALLOWED_FIELDS = new Set([
   "allowed-tools", "disable-model-invocation",
 ]);
 const EXPECTED = {
-  workflow: ["architecture", "commit", "debug", "decision-map", "design", "implement", "parallel-work", "plan", "prototype", "research", "survey", "verify"],
+  workflow: ["architecture", "commit", "debug", "decision-map", "design", "implement", "plan", "prototype", "research", "survey", "verify"],
   maintenance: ["project-memory", "session-close", "skill-audit", "write-skill"],
   domain: ["apple-interface", "chatgpt-export", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
@@ -45,7 +45,7 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 30);
+  assert.equal(skillFiles().length, 29);
 });
 
 test("README documents the exact approved skill fleet", () => {
@@ -102,9 +102,22 @@ test("only artifact-heavy or workspace skills require explicit invocation", () =
   assert.deepEqual(explicit, ["decision-map", "plan", "teach"]);
 });
 
-test("retired lifecycle names are absent from skill instructions", () => {
-  const stale = /\b(workflow-gate|wayfinder|to-spec|to-tickets|absorb-upstream)\b/;
+test("retired workflow names are absent from skill instructions", () => {
+  const stale = /\b(workflow-gate|wayfinder|to-spec|to-tickets|absorb-upstream|parallel-work)\b/;
   for (const file of skillFiles()) {
     assert.doesNotMatch(fs.readFileSync(file, "utf8"), stale, path.relative(root, file));
   }
+});
+
+test("portable parallel policy remains in owning workflow contracts", () => {
+  const setup = fs.readFileSync(path.join(root, "setup.cjs"), "utf8");
+  const plan = fs.readFileSync(path.join(skillsDir, "workflow", "plan", "SKILL.md"), "utf8");
+  const implement = fs.readFileSync(path.join(skillsDir, "workflow", "implement", "SKILL.md"), "utf8");
+  const verify = fs.readFileSync(path.join(skillsDir, "workflow", "verify", "SKILL.md"), "utf8");
+
+  assert.match(setup, /Parallelize only ready file-disjoint plan units/);
+  assert.match(setup, /Do not relaunch a blocked worker unchanged/);
+  assert.match(plan, /active orchestration runtime for ready file-disjoint units/);
+  assert.match(implement, /edit only its writable files, treat forbidden files/);
+  assert.match(verify, /independently review each completed unit before integrating it/);
 });

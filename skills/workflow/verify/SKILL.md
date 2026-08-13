@@ -59,9 +59,10 @@ or manufacturing findings.
 - Do not make large fixes in review. Route an unknown failure to `debug`, a bounded
   correction to `implement`, and structural debt to `architecture`, then review the new
   candidate fresh.
-- At plan scope, walk every ticket/slice acceptance criterion before calling the
-  whole effort shipped. Incoming reviewer findings are claims to verify, not
-  orders; push back with evidence and fix in leverage order.
+- At plan scope, independently review each completed unit before integrating it,
+  then walk every ticket/slice acceptance criterion before calling the whole
+  effort shipped. Incoming reviewer findings are claims to verify, not orders;
+  push back with evidence and fix in leverage order.
 - Emit `VERDICT: FAIL` when either axis has a required fix or real checks fail;
   `VERDICT: PASS_WITH_RISKS` only for explicit non-blocking risks; otherwise
   `VERDICT: PASS`. Only a pass or user-accepted risks hand the dirty tree to

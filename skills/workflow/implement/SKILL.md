@@ -41,9 +41,9 @@ from the contract, large noisy diffs, skipping the verification.
   run the full relevant suite once at the end. Then hand the complete
   **uncommitted** candidate to `verify` for independent code review. Implementation
   never commits itself or marks a ticket `done`; the parent handles those seams.
-- If assigned through `parallel-work`: edit only the packet's writable files,
-  treat forbidden files as walls, and use the active runtime's parent-contact
-  channel for blockers or unapproved decisions instead of guessing.
+- When delegated a packet, edit only its writable files, treat forbidden files
+  as walls, and use the active runtime's parent-contact channel for blockers or
+  unapproved decisions instead of guessing.
 
 Deliver: what changed and where, contract/behavior changes, checks run, current
 ticket state, and `verify` as the required next step. If code must diverge from
