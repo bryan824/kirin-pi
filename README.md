@@ -77,7 +77,7 @@ bug:   debug -> verify -> commit
 | `rust` | Bryan's Rust API, crate, error, safety, and verification conventions. |
 | `teach` | Create a persistent learning workspace when explicitly requested. |
 
-Vault, Obsidian, and travel skills are intentionally absent. A project that needs private or domain-specific behavior owns it under `.agents/skills/` or `.pi/skills/`.
+Vault, Obsidian, and travel skills are intentionally absent. A project that needs private or domain-specific behavior mirrors it under `.agents/skills/` and `.claude/skills/`.
 
 ## Runtime
 
@@ -123,15 +123,15 @@ GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for 
 
 ## Install or update
 
-Requires Bun. A plain command prompts for scope and packs in a TTY; without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Core (the current 18 core skills) is required for global installs. Optional packs are `frontend`, `rust`, `python`, and `teaching`.
+Requires Bun. A plain command prompts for scope; project scope then prompts for optional packs. Without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Global scope installs the current 18 core skills only. Project scope installs selected optional packs only: `frontend`, `rust`, `python`, and `teaching`.
 
 ```bash
 # Remote or checkout: prompt in a TTY.
 bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)"
 bun run kirin-pi
 
-# Noninteractive global frontend or project frontend.
-bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)" --scope global --packs frontend --yes
+# Noninteractive global core or project frontend.
+bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)" --scope global --yes
 bun run kirin-pi --scope project --project . --packs frontend --yes
 ```
 
@@ -146,13 +146,13 @@ Global setup always owns and replaces both `~/.agents/skills` and `~/.claude/ski
 - backs up changed Claude settings under `~/.claude/kirin-backups/<run>/settings/`; restoring that file disables the managed hooks, after which `~/.claude/kirin/` is inert
 - when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
 
-A global rerun preserves installed optional global packs unless `--packs` explicitly replaces them. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
+A global rerun replaces both global skill roots with core skills. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
 
 ### Project scope
 
-Project setup defaults `--project` to the current directory and installs only selected skills to `<project>/.agents/skills`. It is additive: unrelated and unselected skills remain, identical skills are skipped, and differing collisions are confirmed together in one batch. Existing `.agents` paths that resolve outside the project are rejected.
+Project setup defaults `--project` to the current directory and installs selected optional skills to both `<project>/.agents/skills` and `<project>/.claude/skills`. It is additive: unrelated and unselected skills remain, identical skills are skipped, and differing collisions are confirmed together in one batch. Existing `.agents` or `.claude` paths that resolve outside the project are rejected.
 
-Herdr integration and guidance are included; the Herdr application itself remains a separate system install.
+Global core includes Herdr integration and guidance; the Herdr application itself remains a separate system install.
 
 ## Project memory
 

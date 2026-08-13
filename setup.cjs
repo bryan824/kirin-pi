@@ -94,11 +94,11 @@ Pin a commit, not a branch: bunx resolves each source string once and caches it.
 Set up Kirin globally or install selected skills in one project:
   --scope global|project    choose the global harness or project skills
   --project PATH            project directory (project scope; defaults to cwd)
-  --packs LIST              comma-separated: core, frontend, rust, python, teaching
+  --packs LIST              project packs: frontend, rust, python, teaching
   --yes                     confirm setup and replace project skill collisions
 
 Without a terminal, global setup is the default. Project setup requires --packs.
-Global setup always includes core and preserves optional installed packs unless --packs is given.
+Global setup installs core only. Project setup installs optional packs only.
 
 Rerun the same command to update everything.
 `;
@@ -138,39 +138,19 @@ function parse(argv) {
     for (const pack of packs) {
       if (!Object.hasOwn(SKILL_PACKS, pack)) throw new Error(`Unknown Kirin skill pack: ${pack}.`);
     }
-    options.packs = packs;
+    options.packs = scopePacks(scope, packs);
   }
   if (values.yes) options.yes = true;
   return options;
 }
 
-function selectedGlobalPacks(packs) {
-  return [...new Set(["core", ...(packs ?? [])])];
-}
-
-function installedGlobalSkillMembers(home) {
-  return [
-    path.join(home, ".agents", "skills"),
-    path.join(home, ".claude", "skills"),
-  ].flatMap((root) => {
-    if (!lstat(root)?.isDirectory()) return [];
-    return fs.readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name);
-  });
-}
-
-// Global skill roots are Kirin-owned output. Without installer metadata, any
-// current member is enough to preserve an optional pack across a pack expansion.
-function installedOptionalPacks(installedSkills, packs = Object.keys(SKILL_PACKS), packageRoot = __dirname) {
-  const installed = new Set(installedSkills);
-  return packs.filter((pack) => (
-    pack !== "core" && expandPacks([pack], packageRoot).some((skill) => installed.has(skill.name))
-  ));
-}
-
-function preservedGlobalPacks(home, packageRoot = __dirname) {
-  return installedOptionalPacks(installedGlobalSkillMembers(home), Object.keys(SKILL_PACKS), packageRoot);
+function scopePacks(scope, packs) {
+  if (scope === "global") {
+    if (packs?.some((pack) => pack !== "core")) throw new Error("Global setup installs core only.");
+    return ["core"];
+  }
+  if (packs?.includes("core")) throw new Error("Project setup installs optional packs only.");
+  return packs;
 }
 
 function parseChoice(answer, choices, defaults = [], required = false) {
@@ -265,29 +245,23 @@ async function resolveOptions(options, packageRoot = __dirname, io = {}) {
 
     let packs = options.packs;
     if (!packs) {
-      if (scope === "global") {
-        const installed = preservedGlobalPacks(home, packageRoot);
-        if (!interactive) packs = installed;
-        else {
-          writePrompt(output, "Optional global packs: 1) frontend  2) rust  3) python  4) teaching");
-          const suffix = installed.length ? ` [${installed.join(",")}]: ` : " [none]: ";
-          packs = parseChoice(await ask(`Packs${suffix}`), ["frontend", "rust", "python", "teaching"], installed);
-        }
-      } else if (!interactive) {
+      if (scope === "global") packs = ["core"];
+      else if (!interactive) {
         throw new Error("Kirin project setup requires --packs when input is not a TTY.");
       } else {
-        writePrompt(output, "Project packs: 1) core  2) frontend  3) rust  4) python  5) teaching");
-        packs = parseChoice(await ask("Packs (comma-separated): "), Object.keys(SKILL_PACKS), [], true);
+        const optionalPacks = Object.keys(SKILL_PACKS).filter((pack) => pack !== "core");
+        writePrompt(output, "Project packs: 1) frontend  2) rust  3) python  4) teaching");
+        packs = parseChoice(await ask("Packs (comma-separated): "), optionalPacks, [], true);
       }
     }
-    packs = scope === "global" ? selectedGlobalPacks(packs) : packs;
+    packs = scopePacks(scope, packs);
 
     let decision = options.yes ? "replace" : "skip";
     let plan;
     if (scope === "project") {
       plan = planProjectSkills(project, packs, packageRoot);
       if (plan.collisions.length) {
-        writePrompt(output, `Project skill collisions: ${plan.collisions.map((skill) => skill.name).join(", ")}`);
+        writePrompt(output, `Project skill collisions: ${[...new Set(plan.collisions.map((skill) => skill.name))].join(", ")}`);
         if (options.yes) decision = "replace";
         else if (!interactive) throw new Error("Kirin project skill collisions require --yes when input is not a TTY.");
         else {
@@ -552,21 +526,25 @@ function planProjectSkills(project, packs, packageRoot = __dirname) {
   const projectRoot = fs.realpathSync(requestedRoot);
   if (!Array.isArray(packs) || packs.length === 0) throw new Error("Kirin project setup requires at least one skill pack.");
 
-  const agents = path.join(projectRoot, ".agents");
-  const target = path.join(agents, "skills");
-  existingProjectAncestor(projectRoot, agents);
-  existingProjectAncestor(projectRoot, target);
+  scopePacks("project", packs);
+  const targets = [".agents", ".claude"].map((directory) => path.join(projectRoot, directory, "skills"));
+  for (const target of targets) {
+    existingProjectAncestor(projectRoot, path.dirname(target));
+    existingProjectAncestor(projectRoot, target);
+  }
 
   const selectedSkills = validateSkillSources(expandPacks(packs, packageRoot));
-  const plan = { project: projectRoot, target, add: [], skip: [], collisions: [] };
+  const plan = { project: projectRoot, targets, add: [], skip: [], collisions: [] };
   const names = new Set();
   for (const skill of selectedSkills.sort((left, right) => left.name.localeCompare(right.name))) {
     if (names.has(skill.name)) throw new Error(`Kirin project skill selection has duplicate skill: ${skill.name}`);
     names.add(skill.name);
-    const item = { ...skill, target: path.join(target, skill.name) };
-    if (!lstat(item.target)) plan.add.push(item);
-    else if (sameSkillTree(item.source, item.target)) plan.skip.push(item);
-    else plan.collisions.push(item);
+    for (const target of targets) {
+      const item = { ...skill, target: path.join(target, skill.name) };
+      if (!lstat(item.target)) plan.add.push(item);
+      else if (sameSkillTree(item.source, item.target)) plan.skip.push(item);
+      else plan.collisions.push(item);
+    }
   }
   return plan;
 }
@@ -629,22 +607,34 @@ function directoryTransaction(entries, operations = directoryOperations) {
   }
 }
 
-function applyProjectSkills(plan, decision, operations = directoryOperations) {
+function selectProjectSkills(plan, decision) {
   if (!plan || !Array.isArray(plan.add) || !Array.isArray(plan.skip) || !Array.isArray(plan.collisions)) {
     throw new Error("Kirin project skill plan is invalid.");
   }
   if (!["replace", "skip", "cancel"].includes(decision)) {
     throw new Error("Kirin project skill decision must be `replace`, `skip`, or `cancel`.");
   }
-  if (decision === "cancel") return { decision, added: [], replaced: [], skipped: [] };
+  if (decision === "cancel") return { add: [], replace: [], skip: [] };
 
-  const selected = [...plan.add, ...(decision === "replace" ? plan.collisions : [])];
-  directoryTransaction(selected, operations);
+  const collisionNames = new Set(plan.collisions.map((skill) => skill.name));
+  const skippedAdditions = decision === "skip"
+    ? plan.add.filter((skill) => collisionNames.has(skill.name))
+    : [];
+  return {
+    add: decision === "skip" ? plan.add.filter((skill) => !collisionNames.has(skill.name)) : plan.add,
+    replace: decision === "replace" ? plan.collisions : [],
+    skip: [...plan.skip, ...skippedAdditions, ...(decision === "skip" ? plan.collisions : [])],
+  };
+}
+
+function applyProjectSkills(plan, decision, operations = directoryOperations) {
+  const selected = selectProjectSkills(plan, decision);
+  directoryTransaction([...selected.add, ...selected.replace], operations);
   return {
     decision,
-    added: plan.add.map((skill) => skill.name),
-    replaced: decision === "replace" ? plan.collisions.map((skill) => skill.name) : [],
-    skipped: [...plan.skip, ...(decision === "skip" ? plan.collisions : [])].map((skill) => skill.name),
+    added: selected.add.map((skill) => skill.name),
+    replaced: selected.replace.map((skill) => skill.name),
+    skipped: selected.skip.map((skill) => skill.name),
   };
 }
 
@@ -653,15 +643,15 @@ function syncProjectSkills(project, packs, decision, packageRoot = __dirname, op
   return { plan, result: applyProjectSkills(plan, decision, operations) };
 }
 
-function sharedSkillSources(packageRoot, packs = ["core"]) {
-  return validateSkillSources(expandPacks(selectedGlobalPacks(packs), packageRoot))
+function sharedSkillSources(packageRoot) {
+  return validateSkillSources(expandPacks(["core"], packageRoot))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Both skill roots are Kirin output, rebuilt from scratch every run. Nothing there
 // is tracked or preserved, so hand-placed skills belong in a project instead.
-function syncSharedSkills(packageRoot, home = os.homedir(), packs = ["core"], operations = directoryOperations) {
-  const sourceSkills = sharedSkillSources(packageRoot, packs);
+function syncSharedSkills(packageRoot, home = os.homedir(), operations = directoryOperations) {
+  const sourceSkills = sharedSkillSources(packageRoot);
   const copy = operations.copy ?? directoryOperations.copy;
   directoryTransaction([
     ...[path.join(home, ".agents", "skills"), path.join(home, ".claude", "skills")].map((target) => ({
@@ -820,17 +810,18 @@ function setup(options = {}, packageRoot = __dirname) {
       throw new Error("Kirin project skill collisions require --yes or an explicit decision.");
     }
     if (options.dryRun) {
+      const selected = selectProjectSkills(plan, decision);
       console.log("Kirin project setup dry run:");
-      console.log(`- ${plan.add.length} skill(s) to add, ${plan.collisions.length} collision(s) to ${decision}`);
+      console.log(`- ${selected.add.length} skill target(s) to add, ${selected.replace.length} to replace, ${selected.skip.length} unchanged or skipped`);
       return { dryRun: true, scope, plan, pi: false };
     }
     const result = applyProjectSkills(plan, decision);
     console.log("\nKirin project setup complete.");
-    console.log(`- ${result.added.length} skill(s) added, ${result.replaced.length} replaced, ${result.skipped.length} unchanged or skipped`);
+    console.log(`- ${result.added.length} skill target(s) added, ${result.replaced.length} replaced, ${result.skipped.length} unchanged or skipped`);
     return { dryRun: false, scope, plan, result, pi: false };
   }
 
-  const packs = selectedGlobalPacks(options.packs);
+  const packs = scopePacks("global", options.packs);
   const pi = options.pi === undefined ? piBinary() : options.pi;
   const piSettingsFile = path.join(home, ".pi", "agent", "settings.json");
   const actions = pi ? packageActions(readJson(piSettingsFile, {})) : [];
@@ -852,7 +843,7 @@ function setup(options = {}, packageRoot = __dirname) {
 
   const instructionPlan = planInstructions(home, Boolean(pi));
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
-  const skills = syncSharedSkills(packageRoot, home, packs);
+  const skills = syncSharedSkills(packageRoot, home);
   const instructions = installInstructions(home, runId, Boolean(pi), instructionPlan);
   const claudeRuntime = installClaudeRuntime(packageRoot, home, runId);
   const backups = [...instructions.backups, ...claudeRuntime.backups];
@@ -919,7 +910,6 @@ module.exports = {
   SUBAGENT_DEFAULTS,
   WORKFLOW,
   expandPacks,
-  installedOptionalPacks,
   findExecutable,
   installBlock,
   installInstructions,

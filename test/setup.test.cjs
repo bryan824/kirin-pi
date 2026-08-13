@@ -15,7 +15,6 @@ const {
   SUBAGENT_DEFAULTS,
   WORKFLOW,
   expandPacks,
-  installedOptionalPacks,
   installBlock,
   installInstructions,
   mergeClaudeSettings,
@@ -59,6 +58,7 @@ function fixtureCheckout(base) {
   write(path.join(checkout, "skills", "domain", "chatgpt-export", "SKILL.md"), "---\nname: chatgpt-export\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "herdr", "SKILL.md"), "---\nname: herdr\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "rust", "SKILL.md"), "---\nname: rust\ndescription: test\n---\n");
+  write(path.join(checkout, "skills", "domain", "python-tooling", "SKILL.md"), "---\nname: python-tooling\ndescription: test\n---\n");
   fs.cpSync(path.join(root, "agents"), path.join(checkout, "agents"), { recursive: true });
   return checkout;
 }
@@ -67,15 +67,17 @@ test("setup CLI retains global defaults and parses future selectors", () => {
   assert.deepEqual(parse([]), { help: false, dryRun: false, home: os.homedir() });
   assert.deepEqual(parse(["setup"]), { help: false, dryRun: false, home: os.homedir() });
   assert.deepEqual(parse(["--scope", "global"]), { help: false, dryRun: false, home: os.homedir(), scope: "global" });
-  assert.deepEqual(parse(["setup", "--scope", "project", "--project", "/tmp/kirin", "--packs", "core,frontend", "--yes"]), {
+  assert.deepEqual(parse(["setup", "--scope", "project", "--project", "/tmp/kirin", "--packs", "frontend,rust", "--yes"]), {
     help: false,
     dryRun: false,
     home: os.homedir(),
     scope: "project",
     project: "/tmp/kirin",
-    packs: ["core", "frontend"],
+    packs: ["frontend", "rust"],
     yes: true,
   });
+  assert.throws(() => parse(["--scope", "global", "--packs", "rust"]), /Global setup installs core only/);
+  assert.throws(() => parse(["--scope", "project", "--packs", "core"]), /Project setup installs optional packs only/);
   assert.throws(() => parse(["--packs", "core,unknown"]), /Unknown Kirin skill pack: unknown/);
   assert.throws(() => parse(["--scope", "local"]), /scope must be `global` or `project`/);
   assert.throws(() => parse(["--project", "/tmp/kirin"]), /requires --scope project/);
@@ -89,7 +91,7 @@ test("setup CLI retains global defaults and parses future selectors", () => {
   assert.throws(() => parse(["bootstrap", "workflow"]), /optional `setup` command/);
 });
 
-test("skill packs expand to the approved source groups and preserve installed optional packs", () => {
+test("skill packs expand to the approved source groups", () => {
   assert.deepEqual(Object.keys(SKILL_PACKS), ["core", "frontend", "rust", "python", "teaching"]);
   assert.deepEqual(expandPacks(["core"]).map((skill) => skill.name).sort(), SHARED_SKILLS);
   assert.deepEqual(
@@ -112,11 +114,6 @@ test("skill packs expand to the approved source groups and preserve installed op
     expandPacks(["core"], checkout).map((skill) => skill.name).sort(),
     [...SHARED_SKILLS, "future-workflow", "future-maintenance"].sort(),
   );
-  assert.deepEqual(installedOptionalPacks(SHARED_SKILLS), []);
-  const oldFrontend = expandPacks(["frontend"]).map((skill) => skill.name)
-    .filter((name) => name !== "frontend-writing");
-  assert.deepEqual(installedOptionalPacks(oldFrontend), ["frontend"]);
-  assert.deepEqual(installedOptionalPacks(["rust"]), ["rust"]);
 });
 
 test("option resolution prompts through injected questions and cancels on EOF", async () => {
@@ -158,33 +155,57 @@ test("option resolution prompts through injected questions and cancels on EOF", 
   assert.equal(fs.readFileSync(path.join(project, ".agents", "skills", "rust", "SKILL.md"), "utf8"), "custom\n");
 });
 
-test("non-interactive options preserve installed global packs and require project packs", async () => {
+test("scope choices keep core global and optional packs project-local", async () => {
+  const base = tempDir();
+  const home = path.join(base, "home");
+  const project = path.join(base, "project");
+  fs.mkdirSync(project);
+
+  const globalAnswers = ["global", "yes"];
+  const global = await resolveOptions(
+    { help: false, dryRun: false, home }, root,
+    { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => globalAnswers.shift() },
+  );
+  assert.deepEqual(global.packs, ["core"]);
+
+  const projectAnswers = ["project", "", "rust", "yes"];
+  const local = await resolveOptions(
+    { help: false, dryRun: false, home }, root,
+    { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => projectAnswers.shift() },
+  );
+  assert.deepEqual(local.packs, ["rust"]);
+  await assert.rejects(
+    resolveOptions(
+      { help: false, dryRun: false, home, scope: "global", packs: ["rust"], yes: true }, root,
+      { input: { isTTY: false }, output: { isTTY: false }, cwd: project },
+    ),
+    /Global setup installs core only/,
+  );
+  await assert.rejects(
+    resolveOptions(
+      { help: false, dryRun: false, home, scope: "project", packs: ["core"], yes: true }, root,
+      { input: { isTTY: false }, output: { isTTY: false }, cwd: project },
+    ),
+    /Project setup installs optional packs only/,
+  );
+});
+
+test("non-interactive options default global to core and require project packs", async () => {
   const base = tempDir();
   const home = path.join(base, "home");
   const checkout = fixtureCheckout(base);
-  syncSharedSkills(checkout, home, ["core", "rust"]);
   const global = await resolveOptions(
     { help: false, dryRun: false, home }, checkout,
     { input: { isTTY: false }, output: { isTTY: false }, cwd: base },
   );
-  assert.deepEqual(global.packs, ["core", "rust"]);
+  assert.deepEqual(global.packs, ["core"]);
 
-  const oldFrontendHome = path.join(base, "old-frontend-home");
-  write(path.join(oldFrontendHome, ".agents", "skills", "frontend-design", "SKILL.md"), "old\n");
-  write(path.join(oldFrontendHome, ".claude", "skills", "rust", "SKILL.md"), "old\n");
-  write(path.join(oldFrontendHome, ".pi", "agent", "skills", "python-tooling", "SKILL.md"), "decoy\n");
-  const preserved = await resolveOptions(
-    { help: false, dryRun: false, home: oldFrontendHome }, root,
-    { input: { isTTY: false }, output: { isTTY: false }, cwd: base },
-  );
-  assert.deepEqual(preserved.packs, ["core", "frontend", "rust"]);
-
-  const answers = ["global", "", "yes"];
+  const answers = ["global", "yes"];
   const promptedGlobal = await resolveOptions(
     { help: false, dryRun: false, home }, checkout,
     { input: { isTTY: true }, output: { isTTY: true }, cwd: base, question: async () => answers.shift() },
   );
-  assert.deepEqual(promptedGlobal.packs, ["core", "rust"]);
+  assert.deepEqual(promptedGlobal.packs, ["core"]);
 
   const project = path.join(base, "project");
   fs.mkdirSync(project);
@@ -231,49 +252,65 @@ test("project skill sync preserves custom skills and recognizes identical reruns
   const base = tempDir();
   const checkout = fixtureCheckout(base);
   const project = path.join(base, "project");
-  write(path.join(project, ".agents", "skills", "custom", "SKILL.md"), "custom\n");
+  for (const directory of [".agents", ".claude"]) {
+    write(path.join(project, directory, "skills", "custom", "SKILL.md"), "custom\n");
+  }
   write(path.join(checkout, "skills", "domain", "rust", "version.txt"), "1\n");
   fs.symlinkSync("version.txt", path.join(checkout, "skills", "domain", "rust", "current-version"));
 
   const first = syncProjectSkills(project, ["rust"], "replace", checkout);
-  assert.deepEqual(first.plan.add.map((skill) => skill.name), ["rust"]);
-  assert.equal(fs.readFileSync(path.join(project, ".agents", "skills", "custom", "SKILL.md"), "utf8"), "custom\n");
-  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "rust", "SKILL.md")), true);
-  assert.equal(fs.lstatSync(path.join(project, ".agents", "skills", "rust", "current-version")).isSymbolicLink(), true);
+  assert.deepEqual(first.plan.add.map((skill) => skill.name), ["rust", "rust"]);
+  for (const directory of [".agents", ".claude"]) {
+    assert.equal(fs.readFileSync(path.join(project, directory, "skills", "custom", "SKILL.md"), "utf8"), "custom\n");
+    assert.equal(fs.existsSync(path.join(project, directory, "skills", "rust", "SKILL.md")), true);
+    assert.equal(fs.lstatSync(path.join(project, directory, "skills", "rust", "current-version")).isSymbolicLink(), true);
+  }
 
   const rerun = planProjectSkills(project, ["rust"], checkout);
   assert.deepEqual(rerun.add, []);
   assert.deepEqual(rerun.collisions, []);
-  assert.deepEqual(rerun.skip.map((skill) => skill.name), ["rust"]);
+  assert.deepEqual(rerun.skip.map((skill) => skill.name), ["rust", "rust"]);
 
   fs.chmodSync(path.join(checkout, "skills", "domain", "rust", "version.txt"), 0o755);
-  assert.deepEqual(planProjectSkills(project, ["rust"], checkout).collisions.map((skill) => skill.name), ["rust"]);
-
-  syncProjectSkills(project, ["core"], "replace", checkout);
-  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "rust", "SKILL.md")), true);
+  assert.deepEqual(planProjectSkills(project, ["rust"], checkout).collisions.map((skill) => skill.name), ["rust", "rust"]);
 });
 
 test("project skill sync applies one decision to mixed additions and collisions", () => {
   const base = tempDir();
   const checkout = fixtureCheckout(base);
   const project = path.join(base, "project");
-  const design = path.join(project, ".agents", "skills", "design", "SKILL.md");
-  write(design, "old design\n");
+  const rust = path.join(project, ".agents", "skills", "rust", "SKILL.md");
+  write(rust, "old rust\n");
 
-  const cancelled = syncProjectSkills(project, ["core", "rust"], "cancel", checkout);
-  assert.equal(cancelled.plan.add.some((skill) => skill.name === "rust"), true);
-  assert.equal(cancelled.plan.collisions.some((skill) => skill.name === "design"), true);
-  assert.equal(fs.readFileSync(design, "utf8"), "old design\n");
-  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "rust")), false);
+  const cancelled = syncProjectSkills(project, ["rust", "python"], "cancel", checkout);
+  assert.equal(cancelled.plan.add.some((skill) => skill.name === "python-tooling"), true);
+  assert.equal(cancelled.plan.collisions.some((skill) => skill.name === "rust"), true);
+  assert.equal(fs.readFileSync(rust, "utf8"), "old rust\n");
+  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "python-tooling")), false);
 
-  const skipped = syncProjectSkills(project, ["core", "rust"], "skip", checkout);
-  assert.equal(fs.readFileSync(design, "utf8"), "old design\n");
-  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "rust", "SKILL.md")), true);
+  const originalLog = console.log;
+  const logs = [];
+  console.log = (...items) => logs.push(items.join(" "));
+  try {
+    setup({ scope: "project", project, packs: ["rust", "python"], decision: "skip", dryRun: true }, checkout);
+  } finally {
+    console.log = originalLog;
+  }
+  assert.equal(logs.some((line) => line.includes("2 skill target(s) to add, 0 to replace, 2 unchanged or skipped")), true);
+  assert.equal(fs.existsSync(path.join(project, ".claude", "skills", "rust")), false);
+
+  const skipped = syncProjectSkills(project, ["rust", "python"], "skip", checkout);
+  assert.equal(fs.readFileSync(rust, "utf8"), "old rust\n");
+  assert.equal(fs.existsSync(path.join(project, ".claude", "skills", "rust")), false);
+  for (const directory of [".agents", ".claude"]) {
+    assert.equal(fs.existsSync(path.join(project, directory, "skills", "python-tooling", "SKILL.md")), true);
+  }
+  assert.equal(skipped.result.added.includes("rust"), false);
   assert.equal(skipped.result.replaced.length, 0);
 
-  const replaced = syncProjectSkills(project, ["core", "rust"], "replace", checkout);
-  assert.match(fs.readFileSync(design, "utf8"), /name: design/);
-  assert.equal(replaced.result.replaced.includes("design"), true);
+  const replaced = syncProjectSkills(project, ["rust", "python"], "replace", checkout);
+  assert.match(fs.readFileSync(rust, "utf8"), /name: rust/);
+  assert.equal(replaced.result.replaced.includes("rust"), true);
 });
 
 test("project skill planning prevalidates the project and every selected source", () => {
@@ -287,7 +324,7 @@ test("project skill planning prevalidates the project and every selected source"
   const target = path.join(project, ".agents", "skills", "custom", "SKILL.md");
   write(target, "custom\n");
   fs.rmSync(path.join(checkout, "skills", "domain", "rust"), { recursive: true });
-  assert.throws(() => planProjectSkills(project, ["core", "rust"], checkout), /Missing Kirin skill source/);
+  assert.throws(() => planProjectSkills(project, ["rust"], checkout), /Missing Kirin skill source/);
   assert.equal(fs.readFileSync(target, "utf8"), "custom\n");
 });
 
@@ -295,8 +332,8 @@ test("project skill staging failure leaves selected targets and custom content u
   const base = tempDir();
   const checkout = fixtureCheckout(base);
   const project = path.join(base, "project");
-  const design = path.join(project, ".agents", "skills", "design", "SKILL.md");
-  write(design, "old design\n");
+  const rust = path.join(project, ".agents", "skills", "rust", "SKILL.md");
+  write(rust, "old rust\n");
   write(path.join(project, ".agents", "skills", "custom", "SKILL.md"), "custom\n");
 
   const operations = {
@@ -305,10 +342,12 @@ test("project skill staging failure leaves selected targets and custom content u
       fs.cpSync(source, target, { recursive: true, verbatimSymlinks: true });
     },
   };
-  assert.throws(() => syncProjectSkills(project, ["core", "rust"], "replace", checkout, operations), /later copy failed/);
-  assert.equal(fs.readFileSync(design, "utf8"), "old design\n");
+  assert.throws(() => syncProjectSkills(project, ["python", "rust"], "replace", checkout, operations), /later copy failed/);
+  assert.equal(fs.readFileSync(rust, "utf8"), "old rust\n");
   assert.equal(fs.readFileSync(path.join(project, ".agents", "skills", "custom", "SKILL.md"), "utf8"), "custom\n");
-  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "architecture")), false);
+  for (const directory of [".agents", ".claude"]) {
+    assert.equal(fs.existsSync(path.join(project, directory, "skills", "python-tooling")), false);
+  }
 });
 
 test("failed rollback retains staging with old targets and reports both failures", () => {
@@ -335,26 +374,30 @@ test("failed rollback retains staging with old targets and reports both failures
   assert.equal(failure.name, "AggregateError");
   assert.deepEqual(failure.errors.map((error) => error.message), ["swap failed", "rollback failed"]);
   assert.match(failure.message, /Retained staging:/);
-  assert.equal(failure.staging.length, 1);
-  assert.equal(fs.readFileSync(path.join(failure.staging[0], "previous", "SKILL.md"), "utf8"), "old rust\n");
-  assert.match(fs.readFileSync(path.join(failure.staging[0], "tree", "SKILL.md"), "utf8"), /name: rust/);
+  assert.equal(failure.staging.length, 2);
+  const retained = failure.staging.find((staging) => fs.existsSync(path.join(staging, "previous")));
+  assert.equal(fs.readFileSync(path.join(retained, "previous", "SKILL.md"), "utf8"), "old rust\n");
+  assert.match(fs.readFileSync(path.join(retained, "tree", "SKILL.md"), "utf8"), /name: rust/);
 });
 
 test("project skill ancestors cannot escape the canonical project root", () => {
   const base = tempDir();
   const checkout = fixtureCheckout(base);
-  const project = path.join(base, "project");
   const outside = path.join(base, "outside");
-  fs.mkdirSync(project);
   fs.mkdirSync(outside);
-  fs.symlinkSync(outside, path.join(project, ".agents"), "dir");
-  assert.throws(() => planProjectSkills(project, ["rust"], checkout), /resolves outside/);
-  assert.equal(fs.existsSync(path.join(outside, "skills", "rust")), false);
 
-  fs.rmSync(path.join(project, ".agents"));
-  fs.mkdirSync(path.join(project, ".agents"));
-  fs.symlinkSync(outside, path.join(project, ".agents", "skills"), "dir");
-  assert.throws(() => planProjectSkills(project, ["rust"], checkout), /resolves outside/);
+  for (const directory of [".agents", ".claude"]) {
+    const project = path.join(base, `${directory.slice(1)}-project`);
+    fs.mkdirSync(project);
+    fs.symlinkSync(outside, path.join(project, directory), "dir");
+    assert.throws(() => planProjectSkills(project, ["rust"], checkout), /resolves outside/);
+    assert.equal(fs.existsSync(path.join(outside, "skills", "rust")), false);
+
+    fs.rmSync(path.join(project, directory));
+    fs.mkdirSync(path.join(project, directory));
+    fs.symlinkSync(outside, path.join(project, directory, "skills"), "dir");
+    assert.throws(() => planProjectSkills(project, ["rust"], checkout), /resolves outside/);
+  }
 });
 
 test("a selected skill symlink is replaced without following it", () => {
@@ -421,18 +464,6 @@ test("each run rebuilds both skill roots from the package alone", () => {
   }
 });
 
-test("selected global packs rebuild both shared roots", () => {
-  const base = tempDir();
-  const home = path.join(base, "home");
-  const checkout = fixtureCheckout(base);
-  const result = syncSharedSkills(checkout, home, ["core", "rust"]);
-  assert.equal(result.count, 19);
-  for (const skillRoot of [path.join(home, ".agents", "skills"), path.join(home, ".claude", "skills")]) {
-    assert.equal(fs.existsSync(path.join(skillRoot, "rust", "SKILL.md")), true);
-    assert.equal(fs.readdirSync(skillRoot).length, 19);
-  }
-});
-
 test("a missing selected source fails before either skill destination is rebuilt", () => {
   const base = tempDir();
   const home = path.join(base, "home");
@@ -465,7 +496,7 @@ test("a later shared-skill stage failure leaves both old roots intact", () => {
       fs.cpSync(source, target, { recursive: true, verbatimSymlinks: true });
     },
   };
-  assert.throws(() => syncSharedSkills(checkout, home, ["core"], operations), /later copy failed/);
+  assert.throws(() => syncSharedSkills(checkout, home, operations), /later copy failed/);
   for (const root of roots) {
     assert.equal(fs.existsSync(path.join(root, "design", "updated.txt")), false);
     assert.equal(fs.existsSync(path.join(root, "herdr", "SKILL.md")), true);
@@ -487,7 +518,7 @@ test("a shared-skill swap failure restores both old roots", () => {
       fs.renameSync(source, target);
     },
   };
-  assert.throws(() => syncSharedSkills(checkout, home, ["core"], operations), /second swap failed/);
+  assert.throws(() => syncSharedSkills(checkout, home, operations), /second swap failed/);
   for (const root of roots) {
     assert.equal(fs.existsSync(path.join(root, "design", "updated.txt")), false);
     assert.deepEqual(fs.readdirSync(path.dirname(root)).filter((name) => name.startsWith(".kirin-stage-")), []);
@@ -678,21 +709,26 @@ test("project setup changes only selected project skills and validates collision
 
   const result = setup({ home, scope: "project", project, packs: ["rust"], yes: true, pi: null }, checkout);
   assert.equal(result.scope, "project");
-  assert.match(fs.readFileSync(path.join(project, ".agents", "skills", "rust", "SKILL.md"), "utf8"), /name: rust/);
+  for (const directory of [".agents", ".claude"]) {
+    assert.match(fs.readFileSync(path.join(project, directory, "skills", "rust", "SKILL.md"), "utf8"), /name: rust/);
+  }
   assert.equal(fs.existsSync(path.join(home, ".claude")), false);
 });
 
-test("spawned CLI applies explicit global and project selections without a TTY", () => {
+test("spawned CLI mirrors global core and project selections without a TTY", () => {
   const base = tempDir();
   const globalHome = path.join(base, "global-home");
-  const global = spawnSync(process.execPath, [script, "--scope", "global", "--packs", "rust", "--yes"], {
+  const global = spawnSync(process.execPath, [script, "--scope", "global", "--yes"], {
     cwd: root,
     env: { ...process.env, HOME: globalHome, PATH: "", PI_BIN: "" },
     encoding: "utf8",
   });
   assert.equal(global.status, 0, global.stderr);
-  assert.equal(fs.readdirSync(path.join(globalHome, ".agents", "skills")).length, 19);
-  assert.equal(fs.existsSync(path.join(globalHome, ".agents", "skills", "rust", "SKILL.md")), true);
+  for (const directory of [".agents", ".claude"]) {
+    const skillRoot = path.join(globalHome, directory, "skills");
+    assert.equal(fs.readdirSync(skillRoot).length, 18);
+    assert.equal(fs.existsSync(path.join(skillRoot, "rust", "SKILL.md")), false);
+  }
 
   const project = path.join(base, "project");
   fs.mkdirSync(project);
@@ -703,7 +739,9 @@ test("spawned CLI applies explicit global and project selections without a TTY",
     encoding: "utf8",
   });
   assert.equal(selected.status, 0, selected.stderr);
-  assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "rust", "SKILL.md")), true);
+  for (const directory of [".agents", ".claude"]) {
+    assert.equal(fs.existsSync(path.join(project, directory, "skills", "rust", "SKILL.md")), true);
+  }
   assert.equal(fs.existsSync(path.join(projectHome, ".claude")), false);
 
   write(path.join(project, ".agents", "skills", "rust", "SKILL.md"), "custom\n");
