@@ -30,7 +30,7 @@ large: design | decision-map -> plan -> implement -> verify -> commit
 bug:   debug -> verify -> commit
 ```
 
-`survey`, `research`, and `prototype` gather different evidence. `architecture` chooses structure. `parallel-work` modifies ready file-disjoint work; it is not another lifecycle stage.
+`survey`, `research`, and `prototype` gather different evidence. `architecture` chooses structure. `parallel-work` owns the portable packet/review contract for ready file-disjoint work; the installed orchestration runtime supplies concrete syntax, isolation, durable-run, and escalation mechanics.
 
 ### Workflow skills
 
@@ -42,7 +42,7 @@ bug:   debug -> verify -> commit
 | `decision-map` | Resolve a multi-session decision frontier before planning. |
 | `design` | Set goals, non-goals, contracts, trade-offs, and explicit approval. |
 | `implement` | Build one approved outcome or plan unit. |
-| `parallel-work` | Fan ready file-disjoint packets across workers and reviewers. |
+| `parallel-work` | Fan ready file-disjoint packets across isolated workers and reviewers without naming a runtime. |
 | `plan` | Produce one approved intent + blocker graph artifact. |
 | `prototype` | Answer one logic question or compare divergent UI variants, then delete the harness. |
 | `research` | Answer one external question from primary sources. |
@@ -85,7 +85,6 @@ Vault, Obsidian, and travel skills are intentionally absent. A project that need
 
 | Extension | Purpose |
 |---|---|
-| `agent-sync` | Reconcile bundled presets into Pi's global agent directory. |
 | `chatgpt-export` | Parse saved ChatGPT HTML exports into Markdown or JSON. |
 | `guardrails` | Block broad Git staging, hook bypass, and non-uv Python commands; ensure Git hooks. |
 | `herdr` | Pane/workspace orchestration and settled Pi status reporting. |
@@ -98,7 +97,6 @@ Claude hooks cover lifecycle events, not Pi's full extension API. Kirin uses the
 
 | Pi extension | Claude Code equivalent |
 |---|---|
-| `agent-sync` | None. Pi preset schema and OpenAI model pins are Pi-specific; Claude's native agents remain separate. |
 | `chatgpt-export` | Shared `chatgpt-export` skill and `~/.claude/kirin/chatgpt-export.ts` CLI. |
 | `guardrails` | Global `PreToolUse:Bash` and `SessionStart` hooks using the same policy and Git-hook installer as Pi. |
 | `herdr` | Shared Herdr skill and CLI. Herdr owns Claude agent-state hooks; Pi's typed aliases and session replay stay Pi-only. |
@@ -107,19 +105,21 @@ Claude hooks cover lifecycle events, not Pi's full extension API. Kirin uses the
 
 ### Subagent presets
 
-Presets target `@tintinweb/pi-subagents` and use its native model, thinking, isolation, extension, skill-preload, worktree, and transcript controls.
+Package-owned roles target Nico Bailon's `pi-subagents`. Kirin overrides Nico's built-ins with fused role contracts and adds three evidence specialists. Nico owns workflows, worktrees, automatic missions, artifacts, and the native child-to-parent supervisor channel; approved plans remain the source of intent.
 
 | Agent | Model / thinking | Role |
 |---|---|---|
-| `explore` | `gpt-5.6-luna` / low | Fast hermetic location search. |
+| `scout` | `gpt-5.6-luna` / low | Fast read-only reconnaissance and compressed handoff context. |
+| `researcher` | `gpt-5.6-terra` / high | Primary-source external research through web tools. |
+| `worker` | `gpt-5.6-terra` / high | One bounded implementation packet with supervisor escalation. |
+| `reviewer` | `gpt-5.6-sol` / xhigh | Independent read-only Spec + Standards verdict. |
+| `oracle` | `gpt-5.6-sol` / high | Protect inherited decisions and detect trajectory drift. |
+| `delegate` | `gpt-5.6-terra` / high | General bounded execution with supervisor escalation. |
 | `codebase-analyzer` | `gpt-5.6-terra` / medium | Deep read-only implementation tracing. |
 | `precedent-locator` | `gpt-5.6-terra` / medium | Git-history and follow-up-fix evidence. |
 | `claim-verifier` | `gpt-5.6-sol` / high | Adversarial claim grounding. |
-| `web-researcher` | `gpt-5.6-terra` / high | Primary-source web research through web tools. |
-| `worker` | `gpt-5.6-terra` / high | One bounded worktree implementation packet. |
-| `reviewer` | `gpt-5.6-sol` / xhigh | Expensive read-only Spec + Standards verdict. |
 
-GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for analysis and implementation, Sol for adversarial verification. Built-in `general-purpose` and `Plan` remain available. Global subagent settings use compact tool prose, finite graceful turn limits, schedules off, and transcripts off by default; worker/reviewer opt back in.
+GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for analysis and implementation, Sol for adversarial verification. Nico creates a mission for every delegated run, keeps schedules disabled, and stores project-local recovery artifacts under `.pi/subagents/`. Worktrees are workflow execution options rather than agent frontmatter.
 
 ## Install or update
 
@@ -144,9 +144,9 @@ Global setup always owns and replaces both `~/.agents/skills` and `~/.claude/ski
 - owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
 - copies Claude runtime files under `~/.claude/kirin/` and idempotently merges only Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
 - backs up changed Claude settings under `~/.claude/kirin-backups/<run>/settings/`; restoring that file disables the managed hooks, after which `~/.claude/kirin/` is inert
-- when `pi` exists in `PATH`, installs or updates Kirin, `@tintinweb/pi-subagents`, and `pi-web-access` through `pi install`, then syncs seven agent presets plus compact subagent defaults
+- when `pi` exists in `PATH`, installs or updates Kirin, pinned `pi-subagents` 0.47.1, and `pi-web-access` through `pi install`; Nico discovers Kirin's nine package-owned roles directly
 
-A global rerun replaces both global skill roots with core skills. Colliding agent and instruction paths are backed up before replacement. Restart active agents afterward.
+A global rerun replaces both global skill roots with core skills. Colliding instruction paths are backed up before replacement. During migration, untouched legacy managed agent copies are removed while user-edited copies remain as higher-priority overrides. Restart active agents afterward.
 
 ### Project scope
 

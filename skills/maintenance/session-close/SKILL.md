@@ -7,7 +7,10 @@ description: "When ending a session or switching agents — leave only the resum
 
 Close cleanly, without turning the session into a diary.
 
-Create a handoff only when work must resume elsewhere. Write `context/sessions/<date>-<slug>.md` with:
+When delegated work already has a durable runtime record, use its status,
+decisions, and artifact links as the resume record instead of creating a duplicate handoff.
+
+Create a handoff only when work must resume elsewhere without such a record. Write `context/sessions/<date>-<slug>.md` with:
 
 - goal and current approved plan/unit
 - decisions and contracts

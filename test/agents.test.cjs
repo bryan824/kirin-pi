@@ -6,14 +6,17 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const dir = path.join(root, "agents");
 const EXPECTED = [
-  "explore.md",
   "claim-verifier.md",
   "codebase-analyzer.md",
+  "delegate.md",
+  "oracle.md",
   "precedent-locator.md",
+  "researcher.md",
   "reviewer.md",
-  "web-researcher.md",
+  "scout.md",
   "worker.md",
 ];
+const RETIRED_FIELDS = ["display_name", "isolated", "max_turns", "isolation", "output_transcript"];
 
 function preset(name) {
   const text = fs.readFileSync(path.join(dir, name), "utf8");
@@ -26,44 +29,53 @@ function preset(name) {
   return { fields, text };
 }
 
-test("agent fleet is the approved lean reset", () => {
-  assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith(".md")).sort(), EXPECTED.slice().sort());
+test("agent fleet is the approved Nico override surface", () => {
+  assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith(".md")).sort(), EXPECTED);
 });
 
-test("agents use GPT-5.6 tiers by role", () => {
-  assert.equal(preset("explore.md").fields.model, "openai-codex/gpt-5.6-luna");
-  for (const name of ["codebase-analyzer.md", "precedent-locator.md", "web-researcher.md", "worker.md"]) {
+test("agents use Nico frontmatter and GPT-5.6 tiers", () => {
+  for (const file of EXPECTED) {
+    const { fields, text } = preset(file);
+    const name = path.basename(file, ".md");
+    assert.equal(fields.name, name, file);
+    assert.ok(fields.description, file);
+    assert.ok(["replace", "append"].includes(fields.systemPromptMode), file);
+    assert.match(fields.turnBudget, /^\{"maxTurns":\d+,"graceTurns":\d+\}$/, file);
+    for (const retired of RETIRED_FIELDS) assert.equal(fields[retired], undefined, `${file}: ${retired}`);
+    assert.doesNotMatch(text, /ext:pi-web-access|skills:\s*false|extensions:\s*(?:false|pi-web-access)/);
+  }
+
+  assert.equal(preset("scout.md").fields.model, "openai-codex/gpt-5.6-luna");
+  for (const name of ["codebase-analyzer.md", "precedent-locator.md", "researcher.md", "worker.md", "delegate.md"]) {
     assert.equal(preset(name).fields.model, "openai-codex/gpt-5.6-terra", name);
   }
-  assert.equal(preset("claim-verifier.md").fields.model, "openai-codex/gpt-5.6-sol");
-  assert.equal(preset("reviewer.md").fields.model, "openai-codex/gpt-5.6-sol");
-});
-
-test("repo analysts are hermetic and bounded", () => {
-  for (const name of ["explore.md", "claim-verifier.md", "codebase-analyzer.md", "precedent-locator.md"]) {
-    const { fields } = preset(name);
-    assert.equal(fields.isolated, "true", name);
-    assert.ok(Number(fields.max_turns) > 0 && Number(fields.max_turns) <= 20, name);
-    assert.doesNotMatch(fields.tools, /write|edit/, name);
+  for (const name of ["claim-verifier.md", "reviewer.md", "oracle.md"]) {
+    assert.equal(preset(name).fields.model, "openai-codex/gpt-5.6-sol", name);
   }
 });
 
-test("worker, reviewer, and web researcher use native isolation controls", () => {
-  const worker = preset("worker.md").fields;
-  assert.equal(worker.isolation, "worktree");
-  assert.equal(worker.extensions, "false");
-  assert.equal(worker.skills, "implement");
-  assert.equal(worker.output_transcript, "true");
+test("read-only roles are narrow and workers can escalate", () => {
+  for (const name of ["scout.md", "claim-verifier.md", "codebase-analyzer.md", "precedent-locator.md", "reviewer.md", "oracle.md"]) {
+    const { fields } = preset(name);
+    assert.doesNotMatch(fields.tools, /write|edit/, name);
+    assert.equal(fields.acceptanceRole, "read-only", name);
+    assert.equal(fields.completionGuard, "false", name);
+  }
 
-  const reviewer = preset("reviewer.md").fields;
-  assert.equal(reviewer.extensions, "false");
-  assert.equal(reviewer.skills, "verify");
-  assert.equal(reviewer.output_transcript, "true");
-  assert.doesNotMatch(reviewer.tools, /write|edit/);
+  const researcher = preset("researcher.md").fields;
+  assert.equal(researcher.acceptanceRole, "read-only");
+  for (const tool of ["web_search", "source_check", "fetch_content", "get_search_content"]) {
+    assert.match(researcher.tools, new RegExp(`\\b${tool}\\b`));
+  }
+  assert.equal(researcher.extensions, undefined);
 
-  const web = preset("web-researcher.md").fields;
-  assert.equal(web.extensions, "[pi-web-access]");
-  assert.equal(web.skills, "false");
-  assert.match(web.tools, /ext:pi-web-access\/source_check/);
-  assert.doesNotMatch(web.tools, /bash|write|edit/);
+  for (const name of ["worker.md", "delegate.md"]) {
+    const { fields, text } = preset(name);
+    assert.equal(fields.acceptanceRole, "writer", name);
+    assert.match(fields.tools, /contact_supervisor/, name);
+    assert.match(text, /contact_supervisor/, name);
+  }
+  assert.equal(preset("delegate.md").fields.systemPromptMode, "append");
+  assert.equal(preset("worker.md").fields.skills, "implement");
+  assert.equal(preset("reviewer.md").fields.skills, "verify");
 });

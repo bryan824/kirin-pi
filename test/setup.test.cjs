@@ -10,16 +10,19 @@ const root = path.resolve(__dirname, "..");
 const script = path.join(root, "setup.cjs");
 const {
   KIRIN_SOURCE,
+  RETIRED_PACKAGES,
   SKILL_PACKS,
   START,
-  SUBAGENT_DEFAULTS,
+  SUBAGENT_CONFIG,
   WORKFLOW,
   expandPacks,
   installBlock,
   installInstructions,
   mergeClaudeSettings,
+  mergeSubagentConfig,
   packageActions,
   parse,
+  removeLegacyManagedAgents,
   planProjectSkills,
   resolveOptions,
   setup,
@@ -59,7 +62,6 @@ function fixtureCheckout(base) {
   write(path.join(checkout, "skills", "domain", "herdr", "SKILL.md"), "---\nname: herdr\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "rust", "SKILL.md"), "---\nname: rust\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "python-tooling", "SKILL.md"), "---\nname: python-tooling\ndescription: test\n---\n");
-  fs.cpSync(path.join(root, "agents"), path.join(checkout, "agents"), { recursive: true });
   return checkout;
 }
 
@@ -225,6 +227,21 @@ test("non-interactive options default global to core and require project packs",
   );
 });
 
+test("legacy managed agents are removed without deleting user edits", () => {
+  const home = tempDir();
+  const dir = path.join(home, ".pi", "agent", "agents");
+  const managed = "managed\n";
+  const hash = require("node:crypto").createHash("sha256").update(managed).digest("hex");
+  write(path.join(dir, "scout.md"), managed);
+  write(path.join(dir, "reviewer.md"), "user edit\n");
+  write(path.join(dir, ".kirin-managed-agents.json"), `${JSON.stringify({ "scout.md": hash, "reviewer.md": hash })}\n`);
+
+  assert.deepEqual(removeLegacyManagedAgents(home), { removed: 1, preserved: 1 });
+  assert.equal(fs.existsSync(path.join(dir, "scout.md")), false);
+  assert.equal(fs.readFileSync(path.join(dir, "reviewer.md"), "utf8"), "user edit\n");
+  assert.equal(fs.existsSync(path.join(dir, ".kirin-managed-agents.json")), false);
+});
+
 test("native readline cancels on EOF and Ctrl-C without running setup", async () => {
   for (const endInput of [
     (input) => input.end(),
@@ -242,10 +259,21 @@ test("native readline cancels on EOF and Ctrl-C without running setup", async ()
   }
 });
 
-test("package plan installs missing packages and updates present packages", () => {
+test("package plan reconciles pinned Nico and normalizes legacy Kirin filters", () => {
   assert.deepEqual(packageActions({ packages: [] }).map((item) => item.action), ["install", "install", "install"]);
-  const actions = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-web-access"] });
-  assert.deepEqual(actions.map((item) => item.action), ["update", "install", "update"]);
+
+  const current = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-subagents@0.47.1", "npm:pi-web-access"] });
+  assert.deepEqual(current.map((item) => item.action), ["update", "install", "update"]);
+
+  const migrated = packageActions({ packages: [
+    { source: KIRIN_SOURCE, extensions: ["harness/extensions/*.ts"], skills: [] },
+    "npm:pi-web-access",
+    RETIRED_PACKAGES[0],
+  ] });
+  assert.deepEqual(migrated.map((item) => item.action), ["remove", "remove", "install", "install", "update"]);
+  assert.deepEqual(migrated.map((item) => item.source), [
+    RETIRED_PACKAGES[0], KIRIN_SOURCE, KIRIN_SOURCE, "npm:pi-subagents@0.47.1", "npm:pi-web-access",
+  ]);
 });
 
 test("project skill sync preserves custom skills and recognizes identical reruns", () => {
@@ -794,9 +822,6 @@ test("zero-argument CLI installs shared skills and Claude instructions without P
 test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
   const home = tempDir();
   write(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "custom reviewer\n");
-  // A decoy in Pi's own clone: presets must come from the running package, not from there.
-  const piClone = path.join(home, ".pi", "agent", "git", "github.com", "bryan824", "kirin-pi");
-  write(path.join(piClone, "agents", "reviewer.md"), "decoy reviewer\n");
 
   const fakePi = path.join(home, "bin", "pi");
   write(fakePi, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$HOME/pi-calls\"\n");
@@ -811,27 +836,41 @@ test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
   assert.match(result.stdout, /Kirin setup complete/);
   assert.equal(fs.readFileSync(path.join(home, "pi-calls"), "utf8").trim().split("\n").length, 3);
   assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 18);
-  assert.equal(fs.readdirSync(path.join(home, ".pi", "agent", "agents")).filter((name) => name.endsWith(".md")).length, 7);
-  const reviewerBackups = filesUnder(path.join(home, ".pi", "agent", "kirin-backups"))
-    .filter((file) => path.basename(file) === "reviewer.md");
-  assert.equal(reviewerBackups.length, 1);
-  assert.equal(fs.readFileSync(reviewerBackups[0], "utf8"), "custom reviewer\n");
-  assert.equal(
-    fs.readFileSync(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "utf8"),
-    fs.readFileSync(path.join(root, "agents", "reviewer.md"), "utf8"),
-  );
+  assert.equal(fs.readFileSync(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "utf8"), "custom reviewer\n");
+  assert.equal(fs.existsSync(path.join(home, ".pi", "agent", "agents", ".kirin-managed-agents.json")), false);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, ".pi", "agent", "subagents.json"), "utf8")), SUBAGENT_DEFAULTS);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(home, ".pi", "agent", "extensions", "subagent", "config.json"), "utf8")),
+    SUBAGENT_CONFIG,
+  );
   // `pi install` is the only writer of settings.json; setup never edits it directly.
   assert.equal(fs.existsSync(path.join(home, ".pi", "agent", "settings.json")), false);
 });
 
-test("documented subagent defaults remain compact and finite", () => {
-  assert.deepEqual(SUBAGENT_DEFAULTS, {
-    defaultMaxTurns: 30,
-    graceTurns: 3,
-    schedulingEnabled: false,
+test("documented Nico defaults keep missions automatic and schedules disabled", () => {
+  assert.deepEqual(SUBAGENT_CONFIG, {
     toolDescriptionMode: "compact",
-    outputTranscript: false,
+    scheduledRuns: { enabled: false },
+    missions: { enabled: true },
+    artifactDir: "project",
+  });
+});
+
+test("Nico config merge preserves unrelated nested settings", () => {
+  const home = tempDir();
+  const config = path.join(home, ".pi", "agent", "extensions", "subagent", "config.json");
+  write(config, `${JSON.stringify({
+    scheduledRuns: { enabled: true, maxPending: 7, storeRoot: "/tmp/schedules" },
+    missions: { enabled: false, directory: "custom", retainTerminal: 9 },
+    fleetView: false,
+  })}\n`);
+
+  mergeSubagentConfig(config);
+  assert.deepEqual(JSON.parse(fs.readFileSync(config, "utf8")), {
+    toolDescriptionMode: "compact",
+    scheduledRuns: { enabled: false, maxPending: 7, storeRoot: "/tmp/schedules" },
+    missions: { enabled: true, directory: "custom", retainTerminal: 9 },
+    fleetView: false,
+    artifactDir: "project",
   });
 });

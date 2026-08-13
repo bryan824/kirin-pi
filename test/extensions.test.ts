@@ -6,7 +6,6 @@ import path from "node:path";
 const root = path.resolve(import.meta.dir, "..");
 const extensions = path.join(root, "extensions");
 const entrypoints = [
-  "agent-sync.ts",
   "chatgpt-export.ts",
   "guardrails.ts",
   "herdr/index.ts",

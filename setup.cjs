@@ -2,25 +2,24 @@
 // One idempotent global install/update for Bryan's shared agent harness.
 
 const { spawnSync } = require("node:child_process");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline/promises");
 const { parseArgs } = require("node:util");
-const { formatSyncReport, syncBundledAgents } = require("./agent-sync.cjs");
-
 const KIRIN_SOURCE = "git:github.com/bryan824/kirin-pi";
 const REQUIRED_PACKAGES = [
   KIRIN_SOURCE,
-  "npm:@tintinweb/pi-subagents",
+  "npm:pi-subagents@0.47.1",
   "npm:pi-web-access",
 ];
-const SUBAGENT_DEFAULTS = {
-  defaultMaxTurns: 30,
-  graceTurns: 3,
-  schedulingEnabled: false,
+const RETIRED_PACKAGES = ["npm:@tintinweb/pi-subagents"];
+const SUBAGENT_CONFIG = {
   toolDescriptionMode: "compact",
-  outputTranscript: false,
+  scheduledRuns: { enabled: false },
+  missions: { enabled: true },
+  artifactDir: "project",
 };
 const START = "<!-- kirin-workflow:start -->";
 const END = "<!-- kirin-workflow:end -->";
@@ -322,12 +321,29 @@ function packageSource(entry) {
   return typeof entry === "string" ? entry : entry?.source;
 }
 
+function packageName(source) {
+  if (!source.startsWith("npm:")) return source;
+  const spec = source.slice(4);
+  const version = spec.lastIndexOf("@");
+  return version > 0 ? spec.slice(0, version) : spec;
+}
+
 function packageActions(settings) {
-  const installed = new Set((settings.packages ?? []).map(packageSource).filter(Boolean));
-  return REQUIRED_PACKAGES.map((source) => ({
-    source,
-    action: installed.has(source) ? "update" : "install",
-  }));
+  const entries = settings.packages ?? [];
+  const sources = entries.map(packageSource).filter(Boolean);
+  const installed = new Set(sources.map(packageName));
+  const legacyKirin = entries.some((entry) => typeof entry === "object" && entry?.source === KIRIN_SOURCE);
+  return [
+    ...RETIRED_PACKAGES.filter((source) => installed.has(packageName(source)))
+      .map((source) => ({ source, action: "remove" })),
+    ...(legacyKirin ? [{ source: KIRIN_SOURCE, action: "remove" }] : []),
+    ...REQUIRED_PACKAGES.map((source) => ({
+      source,
+      action: source === "npm:pi-subagents@0.47.1" || !sources.includes(source) || legacyKirin && source === KIRIN_SOURCE
+        ? "install"
+        : "update",
+    })),
+  ];
 }
 
 function findExecutable(name, searchPath = process.env.PATH ?? "") {
@@ -669,23 +685,35 @@ function syncSharedSkills(packageRoot, home = os.homedir(), operations = directo
   return { count: sourceSkills.length };
 }
 
-function syncAgents(sourceDir, targetDir, backupDir) {
-  const safe = syncBundledAgents({ sourceDir, targetDir, apply: false });
-  const conflicts = [...new Set([...safe.pendingUpdate, ...safe.pendingRemove])].sort();
-  const backups = [];
-  for (const file of conflicts) {
-    const target = path.join(targetDir, file);
-    if (lstat(target)) backups.push(backupExisting(target, backupDir));
-  }
-  const result = conflicts.length
-    ? syncBundledAgents({ sourceDir, targetDir, apply: true })
-    : safe;
-  return { result, backups };
+function mergeSubagentConfig(file) {
+  const current = readJson(file, {});
+  writeJson(file, {
+    ...current,
+    ...SUBAGENT_CONFIG,
+    scheduledRuns: { ...(current.scheduledRuns ?? {}), ...SUBAGENT_CONFIG.scheduledRuns },
+    missions: { ...(current.missions ?? {}), ...SUBAGENT_CONFIG.missions },
+  });
 }
 
-function mergeSubagentSettings(file) {
-  const current = readJson(file, {});
-  writeJson(file, { ...current, ...SUBAGENT_DEFAULTS });
+function removeLegacyManagedAgents(home) {
+  const dir = path.join(home, ".pi", "agent", "agents");
+  const manifest = path.join(dir, ".kirin-managed-agents.json");
+  if (!fs.existsSync(manifest)) return { removed: 0, preserved: 0 };
+
+  const managed = readJson(manifest, {});
+  let removed = 0;
+  let preserved = 0;
+  for (const [name, hash] of Object.entries(managed)) {
+    const file = path.join(dir, name);
+    if (path.basename(name) !== name || !name.endsWith(".md") || typeof hash !== "string" || !lstat(file)?.isFile()) continue;
+    const current = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    if (current === hash) {
+      fs.unlinkSync(file);
+      removed++;
+    } else preserved++;
+  }
+  fs.unlinkSync(manifest);
+  return { removed, preserved };
 }
 
 function isObject(value) {
@@ -847,20 +875,12 @@ function setup(options = {}, packageRoot = __dirname) {
   const instructions = installInstructions(home, runId, Boolean(pi), instructionPlan);
   const claudeRuntime = installClaudeRuntime(packageRoot, home, runId);
   const backups = [...instructions.backups, ...claudeRuntime.backups];
-  let agents;
 
+  let legacyAgents;
   if (pi) {
     ensurePackages(home, actions, pi);
-
-    const synced = syncAgents(
-      path.join(packageRoot, "agents"),
-      path.join(home, ".pi", "agent", "agents"),
-      path.join(home, ".pi", "agent", "kirin-backups", runId, "agents"),
-    );
-    if (synced.result.errors.length) throw new Error(formatSyncReport(synced.result));
-    agents = synced.result;
-    backups.push(...synced.backups);
-    mergeSubagentSettings(path.join(home, ".pi", "agent", "subagents.json"));
+    legacyAgents = removeLegacyManagedAgents(home);
+    mergeSubagentConfig(path.join(home, ".pi", "agent", "extensions", "subagent", "config.json"));
   }
 
   if (currentClaudeText !== mergedClaudeText) {
@@ -875,11 +895,16 @@ function setup(options = {}, packageRoot = __dirname) {
   console.log("\nKirin setup complete.");
   console.log(`- ${skills.count} shared skills installed (${packs.join(", ")})`);
   console.log("- Claude imports shared instructions and uses Kirin's global hooks");
-  if (pi) console.log(`- ${formatSyncReport(agents)}`);
+  if (pi) {
+    console.log("- Nico subagents installed with Kirin package-owned roles");
+    if (legacyAgents.removed || legacyAgents.preserved) {
+      console.log(`- removed ${legacyAgents.removed} legacy managed agent(s); preserved ${legacyAgents.preserved} user-edited agent(s)`);
+    }
+  }
   else console.log("- Pi not found in PATH; Pi-specific configuration skipped");
   if (backups.length) console.log(`- ${backups.length} replaced item(s) backed up under your home directory`);
   console.log("\nRestart active agents. Rerun this same command whenever you want to update.");
-  return { dryRun: false, skills, agents, pi: Boolean(pi), backups, claudeRuntime: claudeRuntime.runtime };
+  return { dryRun: false, skills, pi: Boolean(pi), backups, claudeRuntime: claudeRuntime.runtime };
 }
 
 async function run(argv = process.argv.slice(2), io = {}) {
@@ -907,14 +932,17 @@ module.exports = {
   KIRIN_SOURCE,
   SKILL_PACKS,
   START,
-  SUBAGENT_DEFAULTS,
+  SUBAGENT_CONFIG,
+  RETIRED_PACKAGES,
   WORKFLOW,
   expandPacks,
   findExecutable,
   installBlock,
   installInstructions,
   mergeClaudeSettings,
+  mergeSubagentConfig,
   packageActions,
+  removeLegacyManagedAgents,
   parse,
   planProjectSkills,
   piBinary,
@@ -924,7 +952,6 @@ module.exports = {
   setup,
   sharedSkillSources,
   sameSkillTree,
-  syncAgents,
   syncProjectSkills,
   syncSharedSkills,
   applyProjectSkills,

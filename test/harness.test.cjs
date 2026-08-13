@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
@@ -15,10 +16,10 @@ function filesUnder(dir) {
 }
 
 test("executable integration lives at the root with no wrapper directory", () => {
-  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "agent-sync.cjs", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs"]) {
+  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs"]) {
     assert.equal(fs.existsSync(path.join(root, name)), true, name);
   }
-  for (const name of ["harness", "scripts", "intercepted-commands", "context", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
+  for (const name of ["harness", "scripts", "intercepted-commands", "context", "agent-sync.cjs", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
     assert.equal(fs.existsSync(path.join(root, name)), false, name);
   }
   assert.equal(fs.existsSync(path.join(root, "docs", "decisions")), false);
@@ -27,11 +28,14 @@ test("executable integration lives at the root with no wrapper directory", () =>
 test("package uses native Pi resources and a strict publication allowlist", () => {
   // No `skills` key: shared skills reach agents through ~/.agents/skills only.
   // Re-adding it makes Pi load every skill a second time from the package.
-  assert.deepEqual(packageJson.pi, { extensions: ["./extensions"] });
+  assert.deepEqual(packageJson.pi, {
+    extensions: ["./extensions"],
+    subagents: { agents: ["./agents"] },
+  });
   assert.equal(packageJson.bin["kirin-pi"], "./setup.cjs");
   assert.deepEqual(packageJson.files, [
     "agents", "extensions", "hooks", "skills", "docs",
-    "agent-sync.cjs", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs",
+    "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs",
     "README.md", "LICENSE", "LICENSE-APACHE",
   ]);
   assert.equal(packageJson.dependencies, undefined);
@@ -45,7 +49,6 @@ test("upstream repository references stay in the ledger except explicit Herdr sy
     ...filesUnder(path.join(root, "extensions")),
     ...filesUnder(path.join(root, "hooks")),
     ...filesUnder(path.join(root, "skills")),
-    path.join(root, "agent-sync.cjs"),
     path.join(root, "chatgpt-export.ts"),
     path.join(root, "guard-policy.cjs"),
     path.join(root, "setup.cjs"),
@@ -84,6 +87,11 @@ test("README documents Claude native-equivalent boundaries", () => {
   assert.match(readme, /\/insights/);
   assert.match(readme, /provider registration is unsupported/i);
   assert.match(readme, /MCP|plugin/);
+});
+
+test("Nico runtime artifacts are repository-ignored", () => {
+  const result = spawnSync("git", ["-c", "core.excludesFile=/dev/null", "check-ignore", ".pi/subagents/artifacts/probe"], { cwd: root });
+  assert.equal(result.status, 0);
 });
 
 test("required legal and current-truth docs exist", () => {
