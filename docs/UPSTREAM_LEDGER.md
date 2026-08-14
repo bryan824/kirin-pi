@@ -22,6 +22,7 @@ Sole record of third-party repositories considered, borrowed from, or required b
 | [`emilkowalski/skills`](https://github.com/emilkowalski/skills) | `70744e3` | Distilled source for motion, Apple-interface, and UI-prototype guidance; no runtime dependency. | Its motion mechanics or prototype workflow change materially. |
 | [`lx-industries/ms-rust-skill`](https://github.com/lx-industries/ms-rust-skill) | reviewed guideline set | Source material distilled into Kirin's Rust references; no runtime dependency. | Rust guidance changes materially. |
 | [`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) | current local plugin | External always-on minimalism stance; not bundled by Kirin. | Kirin duplicates its runtime behavior or loses accepted simplifications. |
+| [`aihero-dev/agents-md-guide`](https://www.aihero.dev/a-complete-guide-to-agents-md) | guide reviewed 2026-08-13 | Source of minimal instruction-budget and progressive-disclosure principles distilled into the user-invoked `agents-md` skill. | Cross-agent instruction-file conventions or the guide's recommendations change materially. |
 | [`kepano/obsidian-skills`](https://github.com/kepano/obsidian-skills) | reviewed, not bundled | Removed from default harness. Vault projects may install their own project-local skills. | A repository explicitly needs vault tooling. |
 
 ## Current borrowed surfaces

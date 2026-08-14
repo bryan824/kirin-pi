@@ -11,7 +11,7 @@ const ALLOWED_FIELDS = new Set([
 ]);
 const EXPECTED = {
   workflow: ["architecture", "commit", "debug", "decision-map", "design", "implement", "plan", "prototype", "research", "survey", "verify"],
-  maintenance: ["project-memory", "session-close", "skill-audit", "write-skill"],
+  maintenance: ["agents-md", "project-memory", "session-close", "skill-audit", "write-skill"],
   domain: ["apple-interface", "chatgpt-export", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
 
@@ -45,7 +45,7 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 29);
+  assert.equal(skillFiles().length, 30);
 });
 
 test("README documents the exact approved skill fleet", () => {
@@ -92,14 +92,29 @@ test("frontend skill Markdown relative links resolve", () => {
   }
 });
 
-test("only artifact-heavy or workspace skills require explicit invocation", () => {
+test("only approved side-effecting or workspace skills require explicit invocation", () => {
   const explicit = skillFiles().flatMap((file) => {
     const text = fs.readFileSync(file, "utf8");
     return /\ndisable-model-invocation:\s*true\s*(?:\n|$)/.test(text)
       ? [path.basename(path.dirname(file))]
       : [];
   }).sort();
-  assert.deepEqual(explicit, ["decision-map", "plan", "teach"]);
+  assert.deepEqual(explicit, ["agents-md", "decision-map", "plan", "teach"]);
+});
+
+test("agents-md stays user-triggered and preserves its canonical file contract", () => {
+  const text = fs.readFileSync(path.join(skillsDir, "maintenance", "agents-md", "SKILL.md"), "utf8");
+  assert.match(text, /disable-model-invocation:\s*true/);
+  assert.match(text, /description: "When the user explicitly asks/);
+  assert.match(text, /smallest useful always-loaded map/);
+  const inspect = text.indexOf("Inspect the path type and content of both `AGENTS.md` and `CLAUDE.md`");
+  const approve = text.indexOf("Present the proposed keep, move, and remove set and get approval");
+  assert.ok(inspect >= 0 && inspect < approve);
+  assert.match(text, /never write through either symlink/);
+  assert.match(text, /untracked, ignored, staged, or unstaged regular file/);
+  assert.match(text, /adjacent `<name>\.bak`/);
+  assert.match(text, /Move useful unique `CLAUDE\.md` guidance/);
+  assert.match(text, /exactly `@AGENTS\.md` and a trailing newline/);
 });
 
 test("retired workflow names are absent from skill instructions", () => {

@@ -52,6 +52,7 @@ bug:   debug -> verify -> commit
 
 | Skill | Purpose |
 |---|---|
+| `agents-md` | Explicitly create or repair a minimal AGENTS.md and canonical CLAUDE.md import. |
 | `project-memory` | Initialize/check minimal committed `docs/` + ignored `context/`. |
 | `session-close` | Preserve only needed handoff context or durable session lessons. |
 | `skill-audit` | Measure overlap, use, drift, and prompt cost. |
@@ -122,7 +123,7 @@ GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for 
 
 ## Install or update
 
-Requires Bun. A plain command prompts for scope; project scope then prompts for optional packs. Without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Global scope installs the current 17 core skills only. Project scope installs selected optional packs only: `frontend`, `rust`, `python`, and `teaching`.
+Requires Bun. A plain command prompts for scope; project scope then prompts for optional packs. Without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Global scope installs the current 18 core skills only. Project scope installs selected optional packs only: `frontend`, `rust`, `python`, and `teaching`.
 
 ```bash
 # Remote or checkout: prompt in a TTY.

@@ -34,7 +34,7 @@ const WORKFLOW_SKILLS = [
   "architecture", "commit", "debug", "decision-map", "design", "implement",
   "plan", "prototype", "research", "survey", "verify",
 ];
-const MAINTENANCE_SKILLS = ["project-memory", "session-close", "skill-audit", "write-skill"];
+const MAINTENANCE_SKILLS = ["agents-md", "project-memory", "session-close", "skill-audit", "write-skill"];
 const SHARED_SKILLS = [...WORKFLOW_SKILLS, ...MAINTENANCE_SKILLS, "chatgpt-export", "herdr"].sort();
 
 function tempDir(prefix = "kirin-setup-") {
@@ -473,7 +473,7 @@ test("each run rebuilds both skill roots from the package alone", () => {
   write(path.join(roots[1], "rust", "SKILL.md"), "---\nname: rust\n---\n");
 
   const first = syncSharedSkills(checkout, home);
-  assert.equal(first.count, 17);
+  assert.equal(first.count, 18);
   for (const dir of roots) {
     assert.deepEqual(fs.readdirSync(dir).sort(), SHARED_SKILLS);
     assert.equal(fs.lstatSync(path.join(dir, "design")).isDirectory(), true);
@@ -485,7 +485,7 @@ test("each run rebuilds both skill roots from the package alone", () => {
   write(path.join(checkout, "skills", "workflow", "design", "updated.txt"), "updated\n");
   fs.rmSync(path.join(checkout, "skills", "workflow", "survey"), { recursive: true });
   const second = syncSharedSkills(checkout, home);
-  assert.equal(second.count, 16);
+  assert.equal(second.count, 17);
   for (const dir of roots) {
     assert.equal(fs.existsSync(path.join(dir, "survey")), false);
     assert.equal(fs.readFileSync(path.join(dir, "design", "updated.txt"), "utf8"), "updated\n");
@@ -754,7 +754,7 @@ test("spawned CLI mirrors global core and project selections without a TTY", () 
   assert.equal(global.status, 0, global.stderr);
   for (const directory of [".agents", ".claude"]) {
     const skillRoot = path.join(globalHome, directory, "skills");
-    assert.equal(fs.readdirSync(skillRoot).length, 17);
+    assert.equal(fs.readdirSync(skillRoot).length, 18);
     assert.equal(fs.existsSync(path.join(skillRoot, "rust", "SKILL.md")), false);
   }
 
@@ -809,7 +809,7 @@ test("zero-argument CLI installs shared skills and Claude instructions without P
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Pi not found in PATH/);
   assert.equal(fs.existsSync(path.join(home, ".pi")), false);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 18);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
   const claudeAgents = path.join(home, ".claude", "AGENTS.md");
   assert.equal(fs.lstatSync(claudeAgents).isSymbolicLink(), false);
@@ -835,7 +835,7 @@ test("zero-argument CLI adds Pi-specific setup only when Pi is in PATH", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Kirin setup complete/);
   assert.equal(fs.readFileSync(path.join(home, "pi-calls"), "utf8").trim().split("\n").length, 3);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 18);
   assert.equal(fs.readFileSync(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "utf8"), "custom reviewer\n");
   assert.equal(fs.existsSync(path.join(home, ".pi", "agent", "agents", ".kirin-managed-agents.json")), false);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
