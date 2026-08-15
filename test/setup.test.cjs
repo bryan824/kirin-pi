@@ -259,11 +259,19 @@ test("native readline cancels on EOF and Ctrl-C without running setup", async ()
   }
 });
 
-test("package plan reconciles pinned Nico and normalizes legacy Kirin filters", () => {
+test("package plan tracks latest Nico and normalizes legacy Kirin filters", () => {
   assert.deepEqual(packageActions({ packages: [] }).map((item) => item.action), ["install", "install", "install"]);
 
-  const current = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-subagents@0.47.1", "npm:pi-web-access"] });
-  assert.deepEqual(current.map((item) => item.action), ["update", "install", "update"]);
+  const current = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-subagents", "npm:pi-web-access"] });
+  assert.deepEqual(current.map((item) => item.action), ["update", "update", "update"]);
+
+  const pinned = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-subagents@0.47.1", "npm:pi-web-access"] });
+  assert.deepEqual(pinned, [
+    { source: KIRIN_SOURCE, action: "update" },
+    { source: "npm:pi-subagents", action: "install" },
+    { source: "npm:pi-subagents", action: "update" },
+    { source: "npm:pi-web-access", action: "update" },
+  ]);
 
   const migrated = packageActions({ packages: [
     { source: KIRIN_SOURCE, extensions: ["harness/extensions/*.ts"], skills: [] },
@@ -272,7 +280,7 @@ test("package plan reconciles pinned Nico and normalizes legacy Kirin filters", 
   ] });
   assert.deepEqual(migrated.map((item) => item.action), ["remove", "remove", "install", "install", "update"]);
   assert.deepEqual(migrated.map((item) => item.source), [
-    RETIRED_PACKAGES[0], KIRIN_SOURCE, KIRIN_SOURCE, "npm:pi-subagents@0.47.1", "npm:pi-web-access",
+    RETIRED_PACKAGES[0], KIRIN_SOURCE, KIRIN_SOURCE, "npm:pi-subagents", "npm:pi-web-access",
   ]);
 });
 

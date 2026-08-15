@@ -11,7 +11,7 @@ const { parseArgs } = require("node:util");
 const KIRIN_SOURCE = "git:github.com/bryan824/kirin-pi";
 const REQUIRED_PACKAGES = [
   KIRIN_SOURCE,
-  "npm:pi-subagents@0.47.1",
+  "npm:pi-subagents",
   "npm:pi-web-access",
 ];
 const RETIRED_PACKAGES = ["npm:@tintinweb/pi-subagents"];
@@ -334,16 +334,19 @@ function packageActions(settings) {
   const sources = entries.map(packageSource).filter(Boolean);
   const installed = new Set(sources.map(packageName));
   const legacyKirin = entries.some((entry) => typeof entry === "object" && entry?.source === KIRIN_SOURCE);
+  const pinnedNico = sources.some((source) => packageName(source) === "pi-subagents" && source !== "npm:pi-subagents");
+  // Pi rewrites a pinned source on install but needs a following update to replace its package files.
   return [
     ...RETIRED_PACKAGES.filter((source) => installed.has(packageName(source)))
       .map((source) => ({ source, action: "remove" })),
     ...(legacyKirin ? [{ source: KIRIN_SOURCE, action: "remove" }] : []),
-    ...REQUIRED_PACKAGES.map((source) => ({
-      source,
-      action: source === "npm:pi-subagents@0.47.1" || !sources.includes(source) || legacyKirin && source === KIRIN_SOURCE
-        ? "install"
-        : "update",
-    })),
+    ...REQUIRED_PACKAGES.flatMap((source) => {
+      const item = {
+        source,
+        action: !sources.includes(source) || legacyKirin && source === KIRIN_SOURCE ? "install" : "update",
+      };
+      return pinnedNico && source === "npm:pi-subagents" ? [item, { source, action: "update" }] : [item];
+    }),
   ];
 }
 

@@ -144,7 +144,7 @@ Global setup always owns and replaces both `~/.agents/skills` and `~/.claude/ski
 - owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
 - copies Claude runtime files under `~/.claude/kirin/` and idempotently merges only Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
 - backs up changed Claude settings under `~/.claude/kirin-backups/<run>/settings/`; restoring that file disables the managed hooks, after which `~/.claude/kirin/` is inert
-- when `pi` exists in `PATH`, installs or updates Kirin, pinned `pi-subagents` 0.47.1, and `pi-web-access` through `pi install`; Nico discovers Kirin's nine package-owned roles directly
+- when `pi` exists in `PATH`, installs or updates Kirin, the latest `pi-subagents`, and `pi-web-access` with Pi's package commands; Nico discovers Kirin's nine package-owned roles directly
 
 A global rerun replaces both global skill roots with core skills. Colliding instruction paths are backed up before replacement. During migration, untouched legacy managed agent copies are removed while user-edited copies remain as higher-priority overrides. Restart active agents afterward.
 
