@@ -2,7 +2,7 @@
 name: oracle
 aliases: advisor
 description: High-context decision-consistency oracle that prevents trajectory drift
-model: openai-codex/gpt-5.6-sol
+model: openai-codex/gpt-6-astra
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: true

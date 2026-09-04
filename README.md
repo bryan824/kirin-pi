@@ -111,15 +111,17 @@ Package-owned roles target Nico Bailon's `pi-subagents`. Kirin overrides Nico's 
 |---|---|---|
 | `scout` | `gpt-5.6-luna` / low | Fast read-only reconnaissance and compressed handoff context. |
 | `researcher` | `gpt-5.6-terra` / high | Primary-source external research through web tools. |
-| `worker` | `gpt-5.6-terra` / high | One bounded implementation packet with supervisor escalation. |
-| `reviewer` | `gpt-5.6-sol` / xhigh | Independent read-only Spec + Standards verdict. |
-| `oracle` | `gpt-5.6-sol` / high | Protect inherited decisions and detect trajectory drift. |
-| `delegate` | `gpt-5.6-terra` / high | General bounded execution with supervisor escalation. |
+| `worker` | `gpt-6-astra` / high | One bounded implementation packet with supervisor escalation. |
+| `reviewer` | `gpt-6-astra` / xhigh | Independent read-only Spec + Standards verdict. |
+| `oracle` | `gpt-6-astra` / high | Protect inherited decisions and detect trajectory drift. |
+| `delegate` | `gpt-6-astra` / high | General bounded execution with supervisor escalation. |
 | `codebase-analyzer` | `gpt-5.6-terra` / medium | Deep read-only implementation tracing. |
 | `precedent-locator` | `gpt-5.6-terra` / medium | Git-history and follow-up-fix evidence. |
-| `claim-verifier` | `gpt-5.6-sol` / high | Adversarial claim grounding. |
+| `claim-verifier` | `gpt-6-astra` / high | Adversarial claim grounding. |
 
-GPT-5.6 tiers follow role cost and judgment: Luna for bounded lookup, Terra for analysis and implementation, Sol for adversarial verification. Nico creates a mission for every delegated run, keeps schedules disabled, and stores project-local recovery artifacts under `.pi/subagents/`. Worktrees are workflow execution options rather than agent frontmatter.
+Quality-first tiers use Astra for implementation, general execution, and adversarial judgment; Terra for research and analysis; Luna for bounded lookup. Thinking remains role-specific rather than globally maximized. Agent frontmatter owns these defaults; native per-agent settings or per-run overrides can replace them. Kirin does not set Pi's parent/startup model. Model-selection sources live in the [upstream ledger](docs/UPSTREAM_LEDGER.md).
+
+Nico creates a mission for every delegated run, keeps schedules disabled, and stores project-local recovery artifacts under `.pi/subagents/`. Worktrees are workflow execution options rather than agent frontmatter.
 
 ## Install or update
 

@@ -1,7 +1,7 @@
 ---
 name: claim-verifier
 description: Adversarial repository verifier that preserves claim IDs and verdicts
-model: openai-codex/gpt-5.6-sol
+model: openai-codex/gpt-6-astra
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: true

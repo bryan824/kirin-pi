@@ -1,7 +1,7 @@
 ---
 name: delegate
 description: General bounded executor for work not owned by a specialist
-model: openai-codex/gpt-5.6-terra
+model: openai-codex/gpt-6-astra
 thinking: high
 systemPromptMode: append
 inheritProjectContext: true

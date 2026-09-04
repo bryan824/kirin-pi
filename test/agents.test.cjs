@@ -33,7 +33,7 @@ test("agent fleet is the approved Nico override surface", () => {
   assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith(".md")).sort(), EXPECTED);
 });
 
-test("agents use Nico frontmatter and GPT-5.6 tiers", () => {
+test("agents use role-specific model and thinking tiers", () => {
   for (const file of EXPECTED) {
     const { fields, text } = preset(file);
     const name = path.basename(file, ".md");
@@ -46,11 +46,20 @@ test("agents use Nico frontmatter and GPT-5.6 tiers", () => {
   }
 
   assert.equal(preset("scout.md").fields.model, "openai-codex/gpt-5.6-luna");
-  for (const name of ["codebase-analyzer.md", "precedent-locator.md", "researcher.md", "worker.md", "delegate.md"]) {
+  for (const name of ["codebase-analyzer.md", "precedent-locator.md", "researcher.md"]) {
     assert.equal(preset(name).fields.model, "openai-codex/gpt-5.6-terra", name);
   }
-  for (const name of ["claim-verifier.md", "reviewer.md", "oracle.md"]) {
-    assert.equal(preset(name).fields.model, "openai-codex/gpt-5.6-sol", name);
+  for (const name of ["claim-verifier.md", "reviewer.md", "oracle.md", "worker.md", "delegate.md"]) {
+    assert.equal(preset(name).fields.model, "openai-codex/gpt-6-astra", name);
+  }
+
+  assert.equal(preset("scout.md").fields.thinking, "low");
+  assert.equal(preset("reviewer.md").fields.thinking, "xhigh");
+  for (const name of ["codebase-analyzer.md", "precedent-locator.md"]) {
+    assert.equal(preset(name).fields.thinking, "medium", name);
+  }
+  for (const name of ["claim-verifier.md", "oracle.md", "worker.md", "delegate.md", "researcher.md"]) {
+    assert.equal(preset(name).fields.thinking, "high", name);
   }
 });
 

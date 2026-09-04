@@ -2,7 +2,7 @@
 name: worker
 description: Bounded implementation worker for one approved packet
 aliases: developer, coder, implementer, develop
-model: openai-codex/gpt-5.6-terra
+model: openai-codex/gpt-6-astra
 thinking: high
 systemPromptMode: replace
 inheritProjectContext: true
