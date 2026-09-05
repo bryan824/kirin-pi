@@ -4,6 +4,7 @@
 |---|---|
 | `bun run test` | Skill/Nico-agent schemas, role-specific model/thinking tiers, workflow routing, guard policy, project memory, installer behavior, extension loading, native package-agent discovery, and provenance isolation satisfy current contracts. |
 | `bun run pack:dry` | Published package contains only root runtime files/directories, `skills/`, `docs/`, README, and license files. |
+| `bun test test/skills.test.cjs test/harness.test.cjs` | Static upstream-review entry, approval, checkpoint/provenance, reference-link, and ignored/untracked working-record contracts. Agent behavior still needs scenario probes from the upstream-review reference. |
 | `bun skills/maintenance/skill-audit/scripts/skill-cleaner.ts --root skills --root-only --no-logs` | Skill names are unique and the complete source fleet remains visible within the prompt budget; inspect its overlap and description candidates. |
 | `bun run memory:check` | Required project-memory substrate exists without requiring ignored record directories. |
 | `bun test test/harness.test.cjs test/setup.test.cjs` | Setup resolves interactive choices and `--scope`, `--project`, `--packs`, and `--yes`; global scope installs core plus the latest Nico runtime, retires Tintin and untouched legacy agent copies, preserves user-edited copies and unrelated Nico config, while project scope mirrors selected optional packs safely. |

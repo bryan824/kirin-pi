@@ -75,12 +75,13 @@ test("skills use Pi-compatible frontmatter and directory-matched names", () => {
   }
 });
 
-test("frontend skill Markdown relative links resolve", () => {
+test("skill reference Markdown relative links resolve", () => {
   const dirs = [
     ...EXPECTED.domain
       .filter((name) => name.startsWith("frontend-") || name === "apple-interface")
       .map((name) => path.join(skillsDir, "domain", name)),
     path.join(skillsDir, "workflow", "prototype"),
+    path.join(skillsDir, "maintenance", "skill-audit"),
   ];
   for (const file of dirs.flatMap(markdownFiles)) {
     for (const match of fs.readFileSync(file, "utf8").matchAll(/\]\(([^)]+)\)/g)) {
@@ -115,6 +116,17 @@ test("agents-md stays user-triggered and preserves its canonical file contract",
   assert.match(text, /adjacent `<name>\.bak`/);
   assert.match(text, /Move useful unique `CLAUDE\.md` guidance/);
   assert.match(text, /exactly `@AGENTS\.md` and a trailing newline/);
+});
+
+test("upstream review is gated inside the existing audit skill", () => {
+  const auditDir = path.join(skillsDir, "maintenance", "skill-audit");
+  const audit = fs.readFileSync(path.join(auditDir, "SKILL.md"), "utf8");
+  assert.match(audit, /\[Upstream review\]\(references\/UPSTREAM_REVIEW\.md\)/);
+  assert.match(audit, /Ordinary audits stay local/);
+  const upstream = fs.readFileSync(path.join(auditDir, "references", "UPSTREAM_REVIEW.md"), "utf8");
+  assert.match(upstream, /approval before any harness or ledger edit/);
+  assert.match(upstream, /never execute fetched code/i);
+  assert.doesNotMatch(upstream, /https?:\/\//);
 });
 
 test("retired workflow names are absent from skill instructions", () => {

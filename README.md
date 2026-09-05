@@ -55,8 +55,23 @@ bug:   debug -> verify -> commit
 | `agents-md` | Explicitly create or repair a minimal AGENTS.md and canonical CLAUDE.md import. |
 | `project-memory` | Initialize/check minimal committed `docs/` + ignored `context/`. |
 | `session-close` | Preserve only needed handoff context or durable session lessons. |
-| `skill-audit` | Measure overlap, use, drift, and prompt cost. |
+| `skill-audit` | Measure harness health; explicitly review upstream changes and propose consolidation. |
 | `write-skill` | Create or simplify one sharp skill. |
+
+### Upstream absorption
+
+In Pi, run `/skill:skill-audit Review upstream changes and propose consolidation.`
+It reviews the [upstream ledger](docs/UPSTREAM_LEDGER.md) plus any sources you supply.
+Ordinary audits stay local. The upstream branch pins
+source revisions, establishes missing baselines, and evaluates improvements across
+the whole harness, including replacements and deletions. It presents one
+consolidation plan for approval before editing source or the ledger, then uses the
+existing implementation, independent verification, and commit workflow.
+
+Review checkpoints are separate from borrowing provenance. Fully reviewed sources
+can receive approved checkpoint-only updates; incomplete sources cannot advance.
+Ignored working plans and research are allowed, but are not tracked or published.
+There is no new extension, scheduler, automatic dependency upgrade, push, or deploy.
 
 ### Domain skills
 

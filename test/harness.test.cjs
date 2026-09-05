@@ -19,7 +19,7 @@ test("executable integration lives at the root with no wrapper directory", () =>
   for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs"]) {
     assert.equal(fs.existsSync(path.join(root, name)), true, name);
   }
-  for (const name of ["harness", "scripts", "intercepted-commands", "context", "agent-sync.cjs", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
+  for (const name of ["harness", "scripts", "intercepted-commands", "agent-sync.cjs", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
     assert.equal(fs.existsSync(path.join(root, name)), false, name);
   }
   assert.equal(fs.existsSync(path.join(root, "docs", "decisions")), false);
@@ -89,9 +89,30 @@ test("README documents Claude native-equivalent boundaries", () => {
   assert.match(readme, /MCP|plugin/);
 });
 
-test("Nico runtime artifacts are repository-ignored", () => {
-  const result = spawnSync("git", ["-c", "core.excludesFile=/dev/null", "check-ignore", ".pi/subagents/artifacts/probe"], { cwd: root });
-  assert.equal(result.status, 0);
+test("working records and runtime artifacts remain ignored and untracked", () => {
+  for (const record of ["context/plans/probe.md", ".pi/subagents/artifacts/probe"]) {
+    const result = spawnSync("git", ["-c", "core.excludesFile=/dev/null", "check-ignore", record], { cwd: root });
+    assert.equal(result.status, 0, record);
+  }
+  const tracked = spawnSync("git", ["ls-files", "--", "context/", ".pi/subagents/"], { cwd: root, encoding: "utf8" });
+  assert.equal(tracked.status, 0, tracked.stderr);
+  assert.equal(tracked.stdout, "", "working records must not enter Git history");
+});
+
+test("upstream checkpoints are separate from retained provenance", () => {
+  const ledger = fs.readFileSync(path.join(root, "docs", "UPSTREAM_LEDGER.md"), "utf8");
+  const relationships = ledger.split("## Current relationships\n")[1].split("## Current borrowed surfaces")[0];
+  const rows = relationships.split("\n").filter((line) => line.startsWith("|"));
+  assert.equal(rows[0], "| Source | Provenance / prior review | Reviewed through | Relationship now | Revisit when |");
+  assert.ok(rows.length > 2, "source inventory must not be empty");
+  for (const row of rows.slice(2)) {
+    const cells = row.split("|").slice(1, -1).map((cell) => cell.trim());
+    assert.equal(cells.length, 5, row);
+    assert.ok(cells.every(Boolean), row);
+  }
+  const instructions = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
+  assert.match(instructions, /user-approved checkpoint-only ledger update/);
+  assert.match(instructions, /Incomplete sources never advance/);
 });
 
 test("required legal and current-truth docs exist", () => {

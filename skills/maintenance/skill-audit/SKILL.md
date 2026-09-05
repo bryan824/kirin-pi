@@ -1,11 +1,15 @@
 ---
 name: skill-audit
-description: "When a harness needs judging rather than using — measure its skills, agents, extensions, and hooks for overlap, unused prompts, source drift, instruction conflicts, and prompt-budget waste."
+description: "When judging a harness, including explicit upstream absorption — measure skills, agents, extensions, and hooks for overlap, drift, conflicts, and prompt waste."
 ---
 
 # Skill Audit
 
-Measure first; `write-skill` owns keep/merge/delete judgment.
+Measure first; `write-skill` owns skill consolidation and `architecture` owns
+structural judgment across the harness.
+
+For an explicit upstream review or absorption request, load [Upstream review](references/UPSTREAM_REVIEW.md).
+Ordinary audits stay local: do not fetch upstreams or advance their checkpoints.
 
 Run the co-located analyzer:
 
