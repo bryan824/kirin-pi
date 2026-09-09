@@ -60,7 +60,16 @@ bug:   debug -> verify -> commit
 
 ### Upstream absorption
 
-In Pi, run `/skill:skill-audit Review upstream changes and propose consolidation.`
+`skill-audit` is harness-repository maintenance, not a global setup default.
+Install it here from this checkout:
+
+```bash
+bun run kirin-pi install skill-audit --scope project
+```
+
+Restart your agent, then in Pi run
+`/skill:skill-audit Review upstream changes and propose consolidation.`
+Existing global copies need a separate migration; installing locally does not remove them.
 It reviews the [upstream ledger](docs/UPSTREAM_LEDGER.md) plus any sources you supply.
 Ordinary audits stay local. The upstream branch pins
 source revisions, establishes missing baselines, and evaluates improvements across
@@ -138,38 +147,57 @@ Quality-first tiers use Astra for implementation, general execution, and adversa
 
 Nico creates a mission for every delegated run, keeps schedules disabled, and stores project-local recovery artifacts under `.pi/subagents/`. Worktrees are workflow execution options rather than agent frontmatter.
 
-## Install or update
+## Install skills
 
-Requires Bun. A plain command prompts for scope; project scope then prompts for optional packs. Without a TTY it defaults to global. Use `--scope`, `--project`, `--packs`, and `--yes` to resolve those choices explicitly. Global scope installs the current 18 core skills only. Project scope installs selected optional packs only: `frontend`, `rust`, `python`, and `teaching`.
+Requires Bun. Choose `install` for individual skills or explicit `setup` for the full harness. No command shows help without changing anything. Missing `--scope` prompts in a terminal and errors without one; there is no implicit global installation.
 
 ```bash
-# Remote or checkout: prompt in a TTY.
-bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)"
-bun run kirin-pi
+# From this checkout: current skill sources, no push or link step required.
+bun run kirin-pi install skill-audit --scope project
+bun run kirin-pi install debug verify --scope global
+bun run kirin-pi install frontend-design --scope project --project /path/to/repo
 
-# Noninteractive global core or project frontend.
-bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)" --scope global --yes
-bun run kirin-pi --scope project --project . --packs frontend --yes
+# From a published commit: the same commands and scope rules.
+bunx "github:bryan824/kirin-pi#$(git ls-remote https://github.com/bryan824/kirin-pi main | cut -c1-7)" install skill-audit --scope project
 ```
 
-Pin a commit rather than a branch. `bunx` caches per source string and resolves each one exactly once, so `#main` keeps serving whatever commit it first saw — neither `--force` nor `--no-cache` re-checks a branch. A commit cannot move, so its cache entry is always right, and resolving the SHA at call time makes the string change whenever `main` does. A checkout has no such problem, so `bun run kirin-pi` needs nothing.
+Names select individual directories from the shipped skills listed above, regardless of their pack. `install` copies each complete skill, including references and scripts. It never runs package updates, configures hooks or instructions, or installs other skills as dependencies.
 
-### Global scope
+- **Project:** defaults `--project` to the current directory; writes both `<project>/.agents/skills/<name>` and `<project>/.claude/skills/<name>`.
+- **Global:** writes both `~/.agents/skills/<name>` and `~/.claude/skills/<name>`.
 
-Global setup always owns and replaces both `~/.agents/skills` and `~/.claude/skills`, including the shared ChatGPT export and Herdr skills. It also:
+The destination root must exist. Skill-root ancestor links must stay inside its canonical directory. Both hosts may share a skill root, but no root's lookup path may pass through a selected skill tree—even if an intermediate link ends elsewhere. Such dependent layouts are rejected before copying.
 
-- owns `~/.agents/AGENTS.md`; Claude's global `CLAUDE.md` imports it as `@AGENTS.md`
-- copies Claude runtime files under `~/.claude/kirin/` and idempotently merges only Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
-- backs up changed Claude settings under `~/.claude/kirin-backups/<run>/settings/`; restoring that file disables the managed hooks, after which `~/.claude/kirin/` is inert
-- when `pi` exists in `PATH`, installs or updates Kirin, the latest `pi-subagents`, and `pi-web-access` with Pi's package commands; Nico discovers Kirin's nine package-owned roles directly
+Unrelated and unselected skills remain; identical copies are skipped. Differing trees are collisions, not proof of ownership: an interactive run offers replace, paired skip, or cancel. Without a terminal, replacement requires `--replace`. `--yes` alone never authorizes a skill overwrite.
 
-A global rerun replaces both global skill roots with core skills. Colliding instruction paths are backed up before replacement. During migration, untouched legacy managed agent copies are removed while user-edited copies remain as higher-priority overrides. Restart active agents afterward.
+Replacement discards the old selected trees after the batch succeeds; it is not a permanent backup. Copy/swap failures roll back the skill batch. A failed rollback retains staging and reports recovery paths. Do not concurrently modify installation roots while a run is active.
 
-### Project scope
+Rerun `install` for the same selection to copy source changes, with replacement consent when needed. There is no separate ownership database or update/removal manager. Project installation reports known global copies but does not migrate them; Pi may keep a global copy on a name collision, so do not assume a local copy overrides it. Restart active agents afterward; Pi must trust project-local resources.
 
-Project setup defaults `--project` to the current directory and installs selected optional skills to both `<project>/.agents/skills` and `<project>/.claude/skills`. It is additive: unrelated and unselected skills remain, identical skills are skipped, and differing collisions are confirmed together in one batch. Existing `.agents` or `.claude` paths that resolve outside the project are rejected.
+This repository ignores its own `.agents/skills/` and `.claude/skills/` copies: `skills/` remains authoritative. The installer does not change another project's ignore rules.
 
-Global core includes Herdr integration and guidance; the Herdr application itself remains a separate system install.
+Pin remote installations to a commit rather than a branch. `bunx` resolves each source string once, so `#main` can keep serving an old cached commit. Resolving the SHA makes the source string change with the published revision. A checkout command uses its working tree directly.
+
+## Full harness setup
+
+Only explicit `setup` reaches the full-harness path:
+
+```bash
+bun run kirin-pi setup --scope global --yes
+bun run kirin-pi setup --scope project --project . --packs frontend
+```
+
+Global setup selects workflow skills, curated shared maintenance skills, ChatGPT export, and Herdr guidance. It excludes `skill-audit`; adding a maintenance directory does not automatically install it globally. Existing project pack conveniences remain available: `frontend`, `rust`, `python`, and `teaching`. Both modes use selective skill writes and the same collision rules; neither rebuilds entire skill roots or silently removes formerly installed skills.
+
+Global setup additionally:
+
+- merges its workflow block into `~/.agents/AGENTS.md`, copies canonical instructions for Pi/Claude, and keeps Claude's `CLAUDE.md` import and custom text
+- copies Claude runtime files under `~/.claude/kirin/` and merges Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
+- backs up changed instruction copies, runtime files, and Claude settings; settings backups live under `~/.claude/kirin-backups/<run>/settings/`
+- when `pi` is available, uses its package commands to install/update Kirin, `pi-subagents`, and `pi-web-access`; package-owned roles remain natively discovered
+- removes untouched legacy managed agent copies while preserving user-edited overrides
+
+These runtime/configuration phases are not one transaction with the skill batch. `--yes` confirms setup, while differing skills still need `--replace` or an interactive collision decision. Restart active agents afterward. The Herdr application remains a separate system install.
 
 ## Project memory
 

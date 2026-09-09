@@ -6,3 +6,7 @@ node_modules/
 # kirin working records — durable truth lives in docs/
 /context/
 /.pi/subagents/
+
+# This repo's local installed copies; skills/ owns the sources.
+/.agents/skills/
+/.claude/skills/

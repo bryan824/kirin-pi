@@ -26,8 +26,8 @@ test("executable integration lives at the root with no wrapper directory", () =>
 });
 
 test("package uses native Pi resources and a strict publication allowlist", () => {
-  // No `skills` key: shared skills reach agents through ~/.agents/skills only.
-  // Re-adding it makes Pi load every skill a second time from the package.
+  // No `skills` key: selected skills reach Pi through global/project .agents/skills.
+  // Re-adding it bypasses selection and loads every packaged skill.
   assert.deepEqual(packageJson.pi, {
     extensions: ["./extensions"],
     subagents: { agents: ["./agents"] },
@@ -89,14 +89,17 @@ test("README documents Claude native-equivalent boundaries", () => {
   assert.match(readme, /MCP|plugin/);
 });
 
-test("working records and runtime artifacts remain ignored and untracked", () => {
-  for (const record of ["context/plans/probe.md", ".pi/subagents/artifacts/probe"]) {
+test("working records, runtime artifacts, and local installed copies stay untracked", () => {
+  for (const record of [
+    "context/plans/probe.md", ".pi/subagents/artifacts/probe",
+    ".agents/skills/skill-audit/SKILL.md", ".claude/skills/skill-audit/SKILL.md",
+  ]) {
     const result = spawnSync("git", ["-c", "core.excludesFile=/dev/null", "check-ignore", record], { cwd: root });
     assert.equal(result.status, 0, record);
   }
-  const tracked = spawnSync("git", ["ls-files", "--", "context/", ".pi/subagents/"], { cwd: root, encoding: "utf8" });
+  const tracked = spawnSync("git", ["ls-files", "--", "context/", ".pi/subagents/", ".agents/skills/", ".claude/skills/"], { cwd: root, encoding: "utf8" });
   assert.equal(tracked.status, 0, tracked.stderr);
-  assert.equal(tracked.stdout, "", "working records must not enter Git history");
+  assert.equal(tracked.stdout, "", "working records and installed copies must not enter Git history");
 });
 
 test("upstream checkpoints are separate from retained provenance", () => {
