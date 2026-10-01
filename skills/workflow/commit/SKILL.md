@@ -1,47 +1,34 @@
 ---
 name: commit
-description: "When the user asks to commit, push, write a commit message, or checkpoint changes — group the dirty tree into logical commits, stage exact paths, and push only when explicit."
+description: "When asked for a commit, its message, or a push — preserve staged intent and verified scope; execute only explicitly authorized operations."
 ---
 
 # Commit
 
-Turn a dirty tree into clean history. The unit is not "everything changed in this
-session"; the unit is one coherent reason a future reader would want to revert,
-review, or cherry-pick.
+One commit should have one coherent reason to review or revert it. A verification
+handoff is evidence, not commit authority; a request for a message alone changes
+nothing.
 
-Resist: `git add -A` reflexes, mixing unrelated or pre-existing changes, hiding
-failed or skipped verification, AI/co-author attribution, pushing just because a
-commit was requested.
+- Establish the authorized paths and operations. Inspect status, staged and
+  unstaged diffs, untracked candidates and recent message style. Do not include
+  unrelated or pre-existing work merely because it is dirty.
+- Preserve staged intent. Ask before unstaging or regrouping another selection.
+  Never stash, clean, move user files or switch branches just to manufacture a
+  clean tree. A request for all intended changes still allows logical commits;
+  honor an explicit single-commit request.
+- Consume fresh verification for the same complete candidate. New code or
+  materially changed evidence requires review again; a prior pass does not cover
+  later hunks. Required failed or unrun checks block the normal commit gate.
+  Report any proposed exceptional checkpoint and obtain explicit authority
+  without relabeling the verification as passed.
+- Stage exact paths, inspect the staged diff and commit only the approved group.
+  Preserve integrity hooks; a hook failure is work to diagnose, not bypass.
+  Use the repository's message style, or concise imperative Conventional Commits
+  when there is none. No generated/co-author attribution or unsolicited sign-off.
+- Push only with explicit push authority. Verify the resulting commit and, when
+  pushing, the actual remote/branch result. Report unexpected changes instead of
+  hiding them behind a successful command.
 
-- Inspect `git status`, staged and unstaged diffs, untracked files, and recent
-  commit subjects before deciding the shape. If the user supplied paths/globs,
-  those paths define the scope unless they explicitly widen it.
-- Dirty tree does not mean one commit. Split unrelated concerns: different
-  features, bug fixes, generated/schema changes, docs-only changes, or
-  pre-existing work that merely happens to be present.
-- If the user says "commit all changes," include all intended files but still
-  split them into logical commits unless they explicitly ask for one commit.
-- Stage exact paths for each commit. Avoid `git add -A`, `git add .`, and broad
-  globs unless the commit plan explicitly covers every matched file.
-- Preserve existing staged intent. If staged files do not match the logical
-  commit plan, ask before unstaging or regrouping.
-- Modified or untracked files you didn't author are user work: never stash,
-  clean, switch branches, or relocate them to get a clean tree.
-- Match the repository's commit-message style from recent history when it is
-  clear; otherwise use concise Conventional Commit subjects. Imperative,
-  specific, no trailing period.
-- Know the verification state before committing. Reuse checks already run; run a
-  relevant cheap check when missing and appropriate. If checks are skipped,
-  failing, or impossible, say that before or with the commit result.
-- Commit as the user only: no "Generated with", no co-author trailers, no
-  sign-offs unless the repo already requires them.
-- Push only when the user explicitly asks to push. After pushing, report the
-  remote/branch and resulting commit range.
-
-Ask when inclusion, grouping, verification expectation, or single-versus-multiple
-commit intent is ambiguous. The safe default is multiple atomic commits with
-unrelated changes left unstaged.
-
-Deliver: commit plan if confirmation is needed; otherwise commit SHA(s), message
-(s), files included per commit, verification used or skipped, and push result if
-applicable.
+Deliver: commit IDs, messages and included scope, verification used, untouched
+work and push result if authorized. Stop at a message or proposed grouping when
+that is all the user requested.

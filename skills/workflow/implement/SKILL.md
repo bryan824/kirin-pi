@@ -1,50 +1,38 @@
 ---
 name: implement
-description: "Build one approved design slice or ready ticket — smallest safe diff, tests/contracts updated, checks run, then hand the uncommitted candidate to verify."
+description: "When implementation intent is clear — deliver the authorized outcome with a small correct diff, meaningful tests, and an uncommitted verification handoff."
 ---
 
 # Implement
 
-Change code for exactly one approved slice, no more. Don't design while
-implementing: if the plan or contract is wrong, stop and say so rather than
-working around it.
+Deliver the approved behavior, not a larger interpretation of it. A clear bounded
+user request or a ready approved unit supplies intent; no ritual interview or
+one-unit-per-session rule is needed.
 
-Resist: scope creep past the slice, redesigning mid-change, silently diverging
-from the contract, large noisy diffs, skipping the verification.
+- Read the actual flow, callers, contracts and relevant tests before choosing a
+  fix. Reuse existing code, the standard library or native host behavior before
+  adding machinery. Minimize the correct change, not merely the changed lines.
+- Preserve user work, staged intent and unrelated behavior. Explicitly authorized
+  writable files are walls for direct requests and delegated packets, including
+  temporary probes and cleanup. Ask the user or parent before crossing them,
+  changing a contract or deciding a material ambiguity. Follow the governed runtime;
+  stop dependent work at a blocker, never silently switch execution protocols.
+- Continue authorized ready work while its constraints hold. If reality
+  contradicts material intent, explain the discrepancy and amend the plan rather
+  than adapting scope silently. Retry only when new evidence, a corrected packet
+  or a changed hypothesis gives a reason; unchanged failed retries are not progress.
+- Leave meaningful regression evidence for nontrivial behavior. Prefer a failing
+  reproduction before a bug fix; expected results come from the contract or an
+  independent worked example, not a copy of the implementation. Use the smallest
+  honest test seam. [TDD](references/TDD.md) gives the detailed discipline without
+  making every useful test prove that it once failed.
+- Run the applicable checks and original scenario. Separate actual execution from
+  inspection, fixtures and unrun manual/host checks. A missing environment is a
+  verification gap, not permission to call a substitute result equivalent.
+- Update authorized current docs when their claims changed. Leave an uncommitted
+  candidate for fresh independent review; implementation evidence does not replace
+  that judgment or grant commit, cleanup, deployment or publication authority.
 
-- Start only from one approved design slice or one ready ticket whose blockers
-  are done. If neither exists — a bare "just build X" — stop and route to
-  `design`; don't invent the scope. For a ticket, reread its approved graph/spec
-  and claim it before edits.
-- One plan unit only; stop before the next. A design approved in this same
-  session may continue here; every later unit starts fresh from the approved
-  plan plus that unit. Use `session-close` when another session must resume it.
-- Smallest safe change that satisfies the slice; preserve behavior unless told
-  otherwise. Before new code or a new dependency, reach in order for: something
-  already in this codebase, the stdlib, a native platform feature, an
-  already-installed dependency.
-- On a plan-vs-reality mismatch, present Expected / Found / Why-it-matters and
-  offer: follow the plan, skip the change, or revise the plan. Never silently
-  adapt.
-- Update tests and adopted project memory when behavior, contracts,
-  architecture, or verification truth changes.
-- Default to test-first for a behavior change: write one failing test, watch it fail
-  for the *right* reason (behavior missing, not a typo or error), write the minimal
-  code to pass, then refactor only while green. A check that never failed proves
-  nothing. Slice vertically — one test → its code → repeat (tracer bullets), never all
-  tests then all code.
-- Test behavior through the public interface — assert outcomes, not internal calls or
-  structure; a test that breaks on a behavior-preserving refactor was testing
-  implementation. Mock only at boundaries you don't control; if it's hard to test, fix
-  the design, not the test. Full discipline: `references/TDD.md`.
-- During the slice, run typechecking and the narrow relevant test file regularly;
-  run the full relevant suite once at the end. Then hand the complete
-  **uncommitted** candidate to `verify` for independent code review. Implementation
-  never commits itself or marks a ticket `done`; the parent handles those seams.
-- When delegated a packet, edit only its writable files, treat forbidden files
-  as walls, and use the active runtime's parent-contact channel for blockers or
-  unapproved decisions instead of guessing.
-
-Deliver: what changed and where, contract/behavior changes, checks run, current
-ticket state, and `verify` as the required next step. If code must diverge from
-the contract, record an explicit amendment — never change intent silently.
+Deliver: outcome, complete changed-file scope, commands/results and artifacts,
+known gaps or blockers, and the verification handoff. Do not mark requirements
+complete merely because the local tests are green.

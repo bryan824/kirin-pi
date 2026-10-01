@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { linkSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
   limitMessages,
   parseChatGptExportHtml,
   renderMarkdown,
+  renderExport,
+  runCli,
 } from "../chatgpt-export.ts";
 
 const HTML = `<!doctype html>
@@ -32,11 +34,45 @@ test("shared parser preserves ChatGPT metadata and Markdown", () => {
   expect(limitMessages(parsed, 1).messages).toEqual([parsed.messages[1]]);
 });
 
+test("code survives prose cleanup, entity decoding and Markdown fencing", () => {
+  const code = 'if flag:\n    print("a  b")\n\n\n\nconst html = "<section>&lt;keep&gt;</section>";\n// data-message-author-role="user" is code, not another message\n// ``` and a nonbreaking\u00a0space  \n';
+  const encoded = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const html = `<article data-note=" data-message-author-role='fake'" data-message-id="before-role" data-message-author-role="assistant"><div class="markdown prose"><p>Before</p><pre><code>${encoded}</code></pre><p>After <code>&lt;b&gt;a  b&lt;/b&gt;</code></p><pre>    plain pre\n</pre></div></article>`;
+  const parsed = parseChatGptExportHtml(html, "/fixture");
+  expect(parsed.messageCount).toBe(1);
+  expect(parsed.messages[0].id).toBe("before-role");
+  expect(parsed.messages[0].text).toContain(`\`\`\`\`\n${code}\`\`\`\``);
+  expect(parsed.messages[0].text).toContain("`<b>a  b</b>`");
+  expect(parsed.messages[0].text).toContain("```\n    plain pre\n```");
+  for (const [content, expected] of [["<code>   </code>", "`   `"], ["<code>`</code>", "`` ` ``"], ["A<code></code>B", "AB"]]) {
+    expect(parseChatGptExportHtml(`<article data-message-author-role="user">${content}</article>`, "/fixture").messages[0].text).toBe(expected);
+  }
+  expect(JSON.parse(renderExport(parsed, "json")).messages[0].text).toBe(parsed.messages[0].text);
+  expect(parseChatGptExportHtml('<article data-message-author-role="user">&#99999999;</article>', "/fixture").messages[0].text).toBe("&#99999999;");
+});
+
+test("CLI rejects every input alias before overwriting data", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "kirin-export-alias-"));
+  try {
+    const input = path.join(dir, "chat.html");
+    writeFileSync(input, HTML);
+    symlinkSync(input, path.join(dir, "link.html"));
+    linkSync(input, path.join(dir, "hard.html"));
+    symlinkSync(dir, path.join(dir, "via-dir"));
+    for (const output of [input, path.join(dir, "link.html"), path.join(dir, "hard.html"), path.join(dir, "via-dir/chat.html")]) {
+      await expect(runCli([input, "--output", output], dir)).rejects.toThrow(/input/);
+      expect(readFileSync(input, "utf8")).toBe(HTML);
+      expect(readFileSync(output, "utf8")).toBe(HTML);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("CLI emits JSON and writes explicit output", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "kirin-chatgpt-export-"));
   const input = path.join(dir, "chat.html");
   const output = path.join(dir, "chat.json");
   writeFileSync(input, HTML);
+  writeFileSync(output, "stale output".repeat(1_000));
 
   const result = Bun.spawnSync([
     "bun", path.resolve(import.meta.dir, "..", "chatgpt-export.ts"), input,

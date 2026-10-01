@@ -1,31 +1,47 @@
 ---
 name: plan
-description: "Turn approved design or a completed decision map into one approved implementation plan with contracts, test seams, stable work units, and blockers."
-disable-model-invocation: true
+description: "When approved work has consequential dependencies, risk, or handoff needs — organize outcomes, ownership, evidence, blockers, and rollback."
 ---
 
 # Plan
 
-Compile settled intent; do not restart discovery.
+Make execution constraints visible. A plan is useful structure, not a compulsory
+step for every bounded request.
 
-Accept either an explicitly approved design or a `decision-map` marked `ready-for-plan`. Read every linked decision and evidence record, plus current code/contracts needed to validate claims. Surface contradictions instead of choosing silently.
+- Start from user intent and current contracts, not an imagined implementation.
+  Read relevant decisions and evidence; surface contradictions or missing material
+  choices before scheduling work that depends on them. Named future components
+  are requested additions, not permission to repurpose unrelated APIs.
+- Return the outline in the response unless the request clearly authorizes writing
+  a planning file. An input document is not an implicit overwrite target. When
+  persistence is authorized, reuse one suitable effort record. Include outcomes,
+  exclusions, constraints, acceptance, risks and rollback; derive acceptance from
+  the user's requirements, not convenient tests. A green baseline is not acceptance
+  for new behavior; name the new check and how it reaches that behavior.
+- Divide work by verifiable outcomes. Prefer a thin end-to-end slice across a risky
+  boundary—a tracer bullet—before expanding whole layers, and name its observable check.
+  If that slice must wait, explain the blocking dependency rather than leaving
+  integration last by default. Name owned files or boundaries, prerequisites and
+  evidence for each unit. Use stable keys where handoff needs them. Paths and short
+  code may express a real contract.
+- Only ready file-disjoint units may run concurrently through the active
+  orchestration runtime. Serialize shared files/contracts and resolve integration
+  ownership. A preparatory refactor or migration phase earns a unit only when it
+  removes an actual execution risk.
+- Keep intent and dependency structure here; use the runtime's claims and status
+  rather than maintaining a duplicate execution store. Preserve exact run,
+  worktree and artifact identities in handoffs when applicable. A failed delegated
+  path stays blocked: changing model, CLI or moving its work to direct execution
+  needs explicit authorization, not a shortcut in the plan.
+- Make consequential choices and scope explicit for approval. Existing authority
+  can cover equivalent implementation details; changed material intent requires
+  an amendment, not silent adaptation. Open requirements need evidence, an
+  explicit user-approved deferral, or a blocker. Proposed contract defaults remain
+  proposals until approved; silence does not settle a dependency.
 
-Write one `context/plans/<slug>.md` using `PLAN_TEMPLATE.md`:
+[PLAN_TEMPLATE.md](PLAN_TEMPLATE.md) is an optional starting point, not a required
+file location or output quota.
 
-- goal and non-goals
-- resolved decisions and evidence links
-- contracts, invariants, acceptance scenarios, and test seams
-- risks and rollback
-- stable work-unit IDs with outcomes, blockers, owned files, and verification
-
-Keep work units vertical and independently verifiable. For wide migrations use expand → migrate → contract. Name overlapping file ownership; overlapping units must serialize. Where a unit would be easier after a preparatory move, sequence that prefactor as its own earlier unit — make the change easy, then make the easy change.
-
-State each unit as the end-to-end behavior it delivers rather than a layer-by-layer edit list, and keep code snippets out; they go stale faster than the plan. The exception is a snippet from `prototype` that encodes a decision more precisely than prose can — a state machine, reducer, schema, or type shape — trimmed to the decision-rich part and marked as the prototype's verdict.
-
-Markdown owns intent and dependency structure only. Do not record mutable claims, retries, owners, or completion status in the plan; host task/runtime tools own execution state.
-
-The file starts `Status: DRAFT`. Audit every source decision and placeholder, then present the whole plan. Only explicit approval changes it to `Status: APPROVED`.
-
-If implementation reality contradicts the plan, stop and amend the plan. Do not silently adapt.
-
-Deliver: approved plan path, ready work-unit frontier, test seams, and next route (`implement` for one unit; the active orchestration runtime for ready file-disjoint units). Stable runtime work keys equal plan unit IDs. Stop.
+Deliver: intent source, ready work, ownership, verification and rollback. Planning
+does not authorize implementation, commits, deployment, or a delegation-protocol
+switch.

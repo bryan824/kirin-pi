@@ -27,6 +27,8 @@ and messages that name a failure without giving a way forward.
   variables or hide grammar in a label; use the product's interpolation and
   plural/select mechanisms so another language can reorder the whole thought.
 
-For holistic review, hand writing findings and verification evidence to the
-[shared review contract](../frontend-design/references/REVIEW.md); do not create
-a parallel review schema.
+When `frontend-design` is installed, use its
+[shared review contract](../frontend-design/references/REVIEW.md). Otherwise report
+focused writing findings, exact evidence, user impact and verification gaps directly.
+Review-only requests stay read-only; do not install siblings or duplicate the full
+review schema.

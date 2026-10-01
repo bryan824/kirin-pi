@@ -1,857 +1,466 @@
 #!/usr/bin/env bun
-// Pi-native skill auditor. Scans the deployed Pi/Claude skill roots (and the repo
-// source), derives model-visibility from `disable-model-invocation` frontmatter
-// (Pi hides those from the system prompt; Claude Code drops the description), and
-// scans Pi/Claude session logs for usage. Harness-agnostic math (budget, dedup,
-// description compaction, similarity) is kept; the I/O layer is Pi/Claude.
+// Read-only filesystem inventory and recorded Pi/Claude usage evidence.
+// This is not a host resource loader, tokenizer, or model-compliance measurement.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 
+type Issue = { path: string; reason: string };
 type Skill = {
-  name: string;
-  baseName: string;
-  description: string;
-  path: string;
-  realPath: string;
-  dir: string;
-  root: string;
-  realRoot: string;
-  scope: string;
-  modelInvocable: boolean;
-  enabled: boolean;
-  descChars: number;
-  lineChars: number;
-  lineBytes: number;
-  bodyHash: string;
-  bodyKey: string;
-  descKey: string;
-  renderPath: string;
+  name: string; baseName: string; description: string; path: string; realPath: string;
+  root: string; scope: string; modelInvocable: boolean; enabled: null;
+  descChars: number; lineChars: number; bodyChars: number; bodyHash: string; bodyKey: string;
 };
+type Usage = { command: number; load: number; skillResult: number; readRequest: number; fileRead: number; referenceRequest: number; referenceRead: number };
+type Records = { parsed: number; malformed: number; messages: number; unsupported: number; unclassifiedToolCalls: number; unmatchedResults: number };
+const emptyUsage = (): Usage => ({ command: 0, load: 0, skillResult: 0, readRequest: 0, fileRead: 0, referenceRequest: 0, referenceRead: 0 });
+const emptyRecords = (): Records => ({ parsed: 0, malformed: 0, messages: 0, unsupported: 0, unclassifiedToolCalls: 0, unmatchedResults: 0 });
+const errorReason = (error: any) => String(error.code ?? error.message ?? error);
+const singleLine = (text: string) => text.replace(/\s+/g, " ").trim();
+const expandHome = (text: string, home = os.homedir()) => text.replace(/^~(?=$|\/)/, home);
 
-type Usage = {
-  command: number; // `/skill:name` user invocation
-  load: number; // `<skill name="...">` injection (skill loaded into context)
-  fileRead: number; // a `skills/<name>/SKILL.md` path referenced (read/bash)
-};
-
-type Budget = {
-  model: string;
-  contextTokens: number;
-  contextSource: string;
-  budgetPercent: number;
-  budgetTokens: number;
-  renderedLineChars: number;
-  unbudgetedFullTokens: number;
-  minimumTokens: number;
-  budgetedTokens: number;
-  charsPerToken: number;
-  unbudgetedBudgetUsedRatio: number;
-  budgetedBudgetUsedRatio: number;
-  unbudgetedContextUsedRatio: number;
-  budgetedContextUsedRatio: number;
-  remainingBudgetTokens: number;
-  includedSkills: number;
-  omittedSkills: number;
-  truncatedDescriptionChars: number;
-  truncatedDescriptionCount: number;
-};
-
-const home = os.homedir();
-const args = new Set(process.argv.slice(2));
-
-function argValue(name: string, fallback: string): string {
-  const raw = process.argv.slice(2);
-  const index = raw.indexOf(name);
-  return index >= 0 && raw[index + 1] ? raw[index + 1] : fallback;
-}
-
-const months = Number(argValue("--months", "3"));
-const noLogs = args.has("--no-logs");
-const json = args.has("--json");
-const includeAll = args.has("--all");
-const model = argValue("--model", "default");
-const budgetPercent = Number(argValue("--budget-percent", "1"));
-const contextTokensOverride = argValue("--context-tokens", "");
-const charsPerToken = Number(argValue("--chars-per-token", "4"));
-const maxLogBytes = Number(argValue("--max-log-mb", "300")) * 1024 * 1024;
-const cutoffMs = Date.now() - Math.max(0, months) * 31 * 24 * 60 * 60 * 1000;
-const budgetRoot = expandHome(argValue("--budget-root", path.join(home, ".agents/skills")));
-const rootOnly = args.has("--root-only");
-const extraRoots = process.argv
-  .slice(2)
-  .flatMap((arg, index, all) => {
-    const value = all[index + 1];
-    return arg === "--root" && value && !value.startsWith("--") ? [value] : [];
-  });
-
-function expandHome(input: string): string {
-  return input.replace(/^~(?=$|\/)/, home);
-}
-
-function exists(input: string): boolean {
-  try {
-    fs.accessSync(input);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function numberArg(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-// Context-window size for the budget model. Pi loads every skill description, so
-// the "full" cost is the real Pi number; the budgeted view models Claude Code's
-// ~1% listing budget. There is no per-harness model cache to read, so this is the
-// `--context-tokens` override or a sane default.
-function modelContext(): { tokens: number; source: string } {
-  const override = numberArg(contextTokensOverride, 0);
-  if (override > 0) return { tokens: override, source: "--context-tokens" };
-  return { tokens: 272_000, source: "default:272k" };
-}
-
-function walkFiles(root: string, predicate: (file: string) => boolean, maxDepth = 8): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  function walk(dir: string, depth: number) {
-    if (depth > maxDepth) return;
-    let real = dir;
-    try {
-      real = fs.realpathSync(dir);
-    } catch {
-      return;
-    }
-    if (seen.has(real)) return;
-    seen.add(real);
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.name === "node_modules" || entry.name === ".git") continue;
-      const file = path.join(dir, entry.name);
-      if (entry.isDirectory() || entry.isSymbolicLink()) {
-        let stat: fs.Stats;
-        try {
-          stat = fs.statSync(file);
-        } catch {
-          continue;
-        }
-        if (stat.isDirectory()) walk(file, depth + 1);
-      } else if (entry.isFile() && predicate(file)) {
-        out.push(file);
-      }
-    }
-  }
-  if (exists(root)) walk(root, 0);
-  return out;
-}
-
-function sanitizeSingleLine(value: string): string {
-  return value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function parseYamlScalar(raw: string): string {
-  const value = raw.trim();
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-export function parseFrontmatter(
-  file: string,
-): { name?: string; description?: string; disableModelInvocation: boolean; body: string } | null {
+export function parseFrontmatter(file: string) {
   const text = fs.readFileSync(file, "utf8");
-  const lines = text.split(/\r?\n/);
-  if (lines[0]?.trim() !== "---") return null;
-  const fm: string[] = [];
-  let end = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i]?.trim() === "---") {
-      end = i;
-      break;
-    }
-    fm.push(lines[i] ?? "");
+  const match = /^\uFEFF?---[^\S\r\n]*\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*(?:\r?\n|$)/.exec(text);
+  if (!match) return null;
+  const metadata = Bun.YAML.parse(match[1]!) as Record<string, unknown>;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) throw new Error("Frontmatter must be a mapping.");
+  for (const key of ["name", "description"]) {
+    if (metadata[key] !== undefined && typeof metadata[key] !== "string") throw new Error(`Frontmatter ${key} must be text.`);
   }
-  if (end < 0) return null;
-  let name: string | undefined;
-  let description: string | undefined;
-  let disableModelInvocation = false;
-  for (let i = 0; i < fm.length; i++) {
-    const line = fm[i] ?? "";
-    const match = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-    if (!match) continue;
-    const key = match[1];
-    const raw = match[2] ?? "";
-    if (key === "name") name = sanitizeSingleLine(parseYamlScalar(raw));
-    if (key === "disable-model-invocation") disableModelInvocation = /true/i.test(raw.trim());
-    if (key === "description") {
-      if (raw.trim() === "|" || raw.trim() === ">") {
-        const block: string[] = [];
-        for (let j = i + 1; j < fm.length; j++) {
-          if (/^[A-Za-z0-9_-]+:\s*/.test(fm[j] ?? "")) break;
-          block.push((fm[j] ?? "").replace(/^\s{2}/, ""));
-        }
-        description = sanitizeSingleLine(block.join(" "));
-      } else {
-        description = sanitizeSingleLine(parseYamlScalar(raw));
+  if (metadata["disable-model-invocation"] !== undefined && typeof metadata["disable-model-invocation"] !== "boolean") {
+    throw new Error("disable-model-invocation must be a boolean.");
+  }
+  return {
+    name: typeof metadata.name === "string" ? singleLine(metadata.name) : undefined,
+    description: typeof metadata.description === "string" ? singleLine(metadata.description) : undefined,
+    disableModelInvocation: metadata["disable-model-invocation"] === true,
+    body: text.slice(match[0].length),
+  };
+}
+
+function walkFiles(root: string, predicate: (file: string) => boolean, maxDepth: number, issues: Issue[], followLinks: boolean): string[] {
+  const files: string[] = [], seen = new Set<string>();
+  function walk(dir: string, depth: number) {
+    if (depth > maxDepth) { issues.push({ path: dir, reason: "depth-limit" }); return; }
+    try {
+      const real = fs.realpathSync(dir);
+      if (seen.has(real)) { issues.push({ path: dir, reason: "alias-or-cycle" }); return; }
+      seen.add(real);
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === ".git" || entry.name === "node_modules") continue;
+        const file = path.join(dir, entry.name);
+        try {
+          if (entry.isSymbolicLink() && !followLinks) { issues.push({ path: file, reason: "symlink-not-followed" }); continue; }
+          const kind = entry.isSymbolicLink() ? fs.statSync(file) : entry;
+          if (kind.isDirectory()) walk(file, depth + 1);
+          else if (kind.isFile() && predicate(file)) files.push(file);
+        } catch (error) { issues.push({ path: file, reason: errorReason(error) }); }
       }
+    } catch (error) { issues.push({ path: dir, reason: errorReason(error) }); }
+  }
+  walk(root, 0);
+  return files;
+}
+
+export function discoverRoots(baseHome = os.homedir(), providedRoots: string[] = [], exclusive = false, issues: Issue[] = [], scanProjects = false): string[] {
+  const roots = new Map<string, string>();
+  const add = (input: string, explicit = false) => {
+    const root = path.resolve(expandHome(input, baseHome));
+    try {
+      const real = fs.realpathSync(root);
+      if (!fs.statSync(real).isDirectory()) throw new Error("not a directory");
+      const previous = roots.get(real);
+      if (!previous || root.length < previous.length) roots.set(real, root);
+    } catch (error: any) { if (explicit || error.code !== "ENOENT") issues.push({ path: root, reason: errorReason(error) }); }
+  };
+  for (const root of providedRoots) add(root, true);
+  if (!exclusive) {
+    for (const relative of [".agents/skills", ".claude/skills", ".pi/agent/skills"]) add(path.join(baseHome, relative));
+    for (const relative of ["skills", ".agents/skills", ".pi/skills"]) add(path.resolve(relative));
+    if (scanProjects) {
+      const projects = path.join(baseHome, "Projects");
+      try {
+        for (const entry of fs.readdirSync(projects, { withFileTypes: true })) {
+          if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+          for (const relative of ["skills", ".agents/skills", ".pi/skills"]) add(path.join(projects, entry.name, relative));
+        }
+      } catch (error: any) { if (error.code !== "ENOENT") issues.push({ path: projects, reason: errorReason(error) }); }
     }
   }
-  return { name, description, disableModelInvocation, body: lines.slice(end + 1).join("\n") };
+  return [...roots.values()].sort();
 }
 
-function fnv1a(input: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function normalizeWords(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[`"'’().,;:!?/\\[\]{}_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function wordSet(input: string): Set<string> {
-  return new Set(normalizeWords(input).split(" ").filter((word) => word.length >= 2));
-}
-
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 1;
-  let intersection = 0;
-  for (const item of a) {
-    if (b.has(item)) intersection++;
-  }
-  return intersection / (a.size + b.size - intersection);
-}
-
-// Classify a skill root. `~/.agents/skills` is what Pi loads (and the codex
-// `--agent` target writes); `~/.claude/skills` is Claude Code's; `~/.pi/...` is
-// Pi-native; a repo `skills/` tree under ~/Projects is the editable source.
-function skillRootScope(root: string): string {
-  const normalized = root.split(path.sep).join("/");
+function rootScope(root: string): string {
+  const normalized = root.replaceAll("\\", "/");
   if (normalized.includes("/.agents/skills")) return "agents";
   if (normalized.includes("/.claude/skills")) return "claude";
   if (normalized.includes("/.pi/agent/skills") || normalized.includes("/.pi/skills")) return "pi";
-  if (/\/Projects\/[^/]+\/skills(\/|$)/.test(normalized)) return "repo";
+  if (root === path.resolve("skills") || /\/Projects\/[^/]+\/skills(\/|$)/.test(normalized)) return "repo";
   return "extra";
 }
 
-// Lower number = better copy to keep. The editable repo source wins; deployed
-// roots (flattened outputs) lose, because you fix the source and re-deploy.
-function deletePriority(skill: Skill): number {
-  if (skill.scope === "repo") return 0;
-  if (skill.scope === "pi") return 1;
-  if (skill.scope === "agents") return 2;
-  if (skill.scope === "claude") return 3;
-  return 4;
+function normalizeWords(text: string): string {
+  return text.toLowerCase().replace(/[`"'’().,;:!?/\\[\]{}_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function preferredKeepSkill(list: Skill[]): Skill {
-  return [...list].sort((a, b) => {
-    const byPriority = deletePriority(a) - deletePriority(b);
-    if (byPriority !== 0) return byPriority;
-    return a.realPath.length - b.realPath.length || a.realPath.localeCompare(b.realPath);
+export function discoverSkills(roots: string[], issues: Issue[] = []): Skill[] {
+  const skills = new Map<string, Skill>();
+  for (const root of roots) {
+    for (const file of walkFiles(root, (file) => path.basename(file) === "SKILL.md", 10, issues, true)) {
+      try {
+        const parsed = parseFrontmatter(file);
+        if (!parsed) throw new Error("missing frontmatter");
+        const name = parsed.name || path.basename(path.dirname(file));
+        const description = parsed.description ?? "";
+        const realPath = fs.realpathSync(file);
+        if (skills.has(realPath)) continue;
+        const skill: Skill = {
+          name, baseName: name, description, path: file, realPath, root, scope: rootScope(root),
+          modelInvocable: !parsed.disableModelInvocation, enabled: null,
+          descChars: [...description].length, lineChars: 0, bodyChars: [...parsed.body].length,
+          bodyHash: createHash("sha256").update(parsed.body).digest("hex"), bodyKey: normalizeWords(parsed.body),
+        };
+        skill.lineChars = [...`${renderSkillLine(skill, description)}\n`].length;
+        skills.set(realPath, skill);
+      } catch (error) { issues.push({ path: file, reason: errorReason(error) }); }
+    }
+  }
+  return [...skills.values()];
+}
+
+function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const name = key(item), group = groups.get(name) ?? [];
+    group.push(item); groups.set(name, group);
+  }
+  return groups;
+}
+
+// A comparison convention only: not host precedence, ownership, or deletion authority.
+function comparisonPriority(skill: Skill): number {
+  return ["repo", "pi", "agents", "claude", "extra"].indexOf(skill.scope);
+}
+function comparisonBase(skills: Skill[], budgetRoot: string): Skill {
+  return [...skills].sort((a, b) => {
+    const preferred = (skill: Skill) => skill.path.startsWith(budgetRoot + path.sep) || skill.realPath.startsWith(budgetRoot + path.sep);
+    return Number(preferred(b)) - Number(preferred(a)) || comparisonPriority(a) - comparisonPriority(b) || a.path.localeCompare(b.path);
   })[0]!;
 }
 
-function configState(): { disabledPaths: Set<string>; disabledNames: Set<string> } {
-  // The deployed flattened skills are not disabled per-skill the way Codex
-  // plugins were; Pi toggles whole package resources via `pi config`, not
-  // individual SKILL.md files. Treat all discovered skills as enabled.
-  return { disabledPaths: new Set(), disabledNames: new Set() };
+export function walkRecentFiles(root: string, cutoffMs: number, issues: Issue[] = [], maxDepth = 8): string[] {
+  // A directory's mtime says nothing about edits to its descendants. Do not prune it.
+  // Unlike skill inventory, log walking does not follow child symlinks into new scopes.
+  return walkFiles(root, (file) => file.endsWith(".jsonl"), maxDepth, issues, false).filter((file) => {
+    try { return fs.statSync(file).mtimeMs >= cutoffMs; }
+    catch (error) { issues.push({ path: file, reason: errorReason(error) }); return false; }
+  });
 }
 
-export function discoverRoots(
-  baseHome = home,
-  providedRoots = extraRoots,
-  exclusive = rootOnly,
-): string[] {
-  const rootsByRealPath = new Map<string, string>();
-  const add = (root: string) => {
-    if (!exists(root)) return;
-    const real = fs.realpathSync(root);
-    const current = rootsByRealPath.get(real);
-    if (!current || root.length < current.length) rootsByRealPath.set(real, root);
-  };
-  const roots = providedRoots.map((root) => root.replace(/^~(?=$|\/)/, baseHome));
-  // Exclusive mode (--root-only): scan only the supplied roots — no harness
-  // defaults, no cwd repo roots, no projects sweep.
-  if (exclusive) {
-    roots.forEach(add);
-    return [...rootsByRealPath.values()].sort();
+function readTarget(file: unknown, cwd: string | undefined, knownPaths: Map<string, string>) {
+  if (typeof file !== "string") return undefined;
+  const normalized = file.replace(/^@/, "").replaceAll("\\", "/");
+  const absolute = normalized.startsWith("/") || /^[a-z]:\//i.test(normalized);
+  const resolved = path.posix.normalize(!absolute && cwd ? `${cwd.replaceAll("\\", "/")}/${normalized}` : normalized);
+  if (path.posix.basename(resolved) === "SKILL.md") {
+    const name = knownPaths.get(resolved) ?? /(?:^|\/)([^/]+)\/SKILL\.md$/.exec(resolved)?.[1];
+    return name ? { name, kind: "fileRead" as const } : undefined;
   }
-  // Deployed + global roots the harnesses actually load.
-  [
-    path.join(baseHome, ".agents/skills"),
-    path.join(baseHome, ".claude/skills"),
-    path.join(baseHome, ".pi/agent/skills"),
-    ...roots,
-  ].forEach(add);
-  // The current repo, when run from a skill repo (e.g. kirin-pi) — gives the
-  // editable source to diff against the deployed copies.
-  for (const local of ["skills", ".agents/skills", ".pi/skills"]) {
-    add(path.resolve(process.cwd(), local));
+  // Attribute Markdown reference reads only inside an inventoried skill directory.
+  if (resolved.endsWith(".md")) {
+    const owners = [...knownPaths].filter(([file]) => resolved.startsWith(path.posix.dirname(file) + "/"))
+      .sort(([a], [b]) => b.length - a.length);
+    if (owners[0]) return { name: owners[0][1], kind: "referenceRead" as const };
   }
-  // Every skill repo under ~/Projects — opt-in, since most aren't deployed and
-  // add cross-repo noise to a "what do my agents load" audit.
-  if (args.has("--scan-projects")) {
-    const projects = path.join(baseHome, "Projects");
-    if (exists(projects)) {
-      for (const entry of fs.readdirSync(projects, { withFileTypes: true })) {
-        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-        for (const sub of [".agents/skills", ".pi/skills", "skills"]) {
-          add(path.join(projects, entry.name, sub));
-        }
-      }
-    }
-  }
-  return [...rootsByRealPath.values()].sort();
 }
 
-function discoverSkills(): Skill[] {
-  const { disabledPaths, disabledNames } = configState();
-  const skillsByRealPath = new Map<string, Skill>();
-  for (const root of discoverRoots()) {
-    for (const file of walkFiles(root, (candidate) => path.basename(candidate) === "SKILL.md", 10)) {
-      const parsed = parseFrontmatter(file);
-      if (!parsed) continue;
-      const baseName = parsed.name || path.basename(path.dirname(file));
-      const description = parsed.description ?? "";
-      const rendered = description
-        ? `- ${baseName}: ${description} (file: ${file})`
-        : `- ${baseName}: (file: ${file})`;
-      const bodyKey = normalizeWords(parsed.body);
-      const realPath = fs.realpathSync(file);
-      const skill: Skill = {
-        name: baseName,
-        baseName,
-        description,
-        path: file,
-        realPath,
-        dir: path.dirname(file),
-        root,
-        realRoot: exists(root) ? fs.realpathSync(root) : root,
-        scope: skillRootScope(root),
-        modelInvocable: !parsed.disableModelInvocation,
-        enabled: !disabledPaths.has(file) && !disabledNames.has(baseName),
-        descChars: [...description].length,
-        lineChars: [...`${rendered}\n`].length,
-        lineBytes: Buffer.byteLength(`${rendered}\n`, "utf8"),
-        bodyHash: fnv1a(bodyKey),
-        bodyKey,
-        descKey: normalizeWords(description),
-        renderPath: file,
-      };
-      if (!skillsByRealPath.has(skill.realPath)) skillsByRealPath.set(skill.realPath, skill);
-    }
-  }
-  return [...skillsByRealPath.values()];
-}
-
-// The set the budget/visibility/unused analysis runs on: one copy per skill name,
-// preferring the budget root (what Pi loads), then the best-kept copy.
-function primarySkills(skills: Skill[]): Skill[] {
-  const byName = groupBy(skills, (skill) => skill.baseName.toLowerCase());
-  const out: Skill[] = [];
-  for (const [, list] of byName) {
-    const inBudgetRoot = list.filter((skill) => skill.realPath.startsWith(`${budgetRoot}${path.sep}`));
-    out.push((inBudgetRoot.length ? inBudgetRoot : list).sort(
-      (a, b) => deletePriority(a) - deletePriority(b),
-    )[0]!);
-  }
-  return out.sort((a, b) => a.baseName.localeCompare(b.baseName));
-}
-
-// ---- Usage (Pi/Claude session logs) ----
-
-function sessionRoots(): string[] {
-  return [path.join(home, ".pi/agent/sessions"), path.join(home, ".claude/projects")].filter(exists);
-}
-
-function recentLogFiles(): string[] {
-  if (noLogs) return [];
-  const files = new Set<string>();
-  for (const root of sessionRoots()) {
-    for (const file of walkRecentFiles(root, (candidate) => candidate.endsWith(".jsonl"), 8)) {
-      try {
-        if (fs.statSync(file).mtimeMs >= cutoffMs) files.add(file);
-      } catch {}
-    }
-  }
-  return [...files].sort();
-}
-
-function walkRecentFiles(root: string, predicate: (file: string) => boolean, maxDepth = 8): string[] {
-  const out: string[] = [];
-  function walk(dir: string, depth: number) {
-    if (depth > maxDepth) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const file = path.join(dir, entry.name);
-      let stat: fs.Stats;
-      try {
-        stat = fs.statSync(file);
-      } catch {
-        continue;
-      }
-      if (entry.isDirectory()) {
-        if (depth > 0 && stat.mtimeMs < cutoffMs) continue;
-        walk(file, depth + 1);
-      } else if (entry.isFile() && stat.mtimeMs >= cutoffMs && predicate(file)) {
-        out.push(file);
-      }
-    }
-  }
-  if (exists(root)) walk(root, 0);
-  return out;
-}
-
-// Count per-skill usage signals in raw session text. Format-resilient by design:
-// matches the three signals Pi/Claude leave behind regardless of nested record
-// shape — `/skill:name` (typed), `<skill name="name">` (loaded into context), and
-// a `skills/name/SKILL.md` path (read/bash).
-export function parsePiSkillUsage(text: string): Map<string, Usage> {
+// Only structured messages count. Tool-result pairing distinguishes a requested
+// read from a successful result. Counts are recorded signals, not model invocations.
+export function parsePiSkillUsage(text: string, records = emptyRecords(), knownPaths = new Map<string, string>()): Map<string, Usage> {
   const usage = new Map<string, Usage>();
+  const pending = new Map<string, { name: string; kind: "fileRead" | "referenceRead" | "skillResult" }>();
+  let cwd: string | undefined;
   const bump = (name: string, key: keyof Usage) => {
-    const lower = name.toLowerCase();
-    const item = usage.get(lower) ?? { command: 0, load: 0, fileRead: 0 };
-    item[key] += 1;
-    usage.set(lower, item);
+    const normalized = name.split(":").at(-1)!.toLowerCase();
+    const counts = usage.get(normalized) ?? emptyUsage();
+    counts[key]++; usage.set(normalized, counts);
   };
-  for (const match of text.matchAll(/\/skill:([a-z0-9][a-z0-9:_-]*)/gi)) {
-    bump((match[1] ?? "").split(":").at(-1) ?? "", "command");
-  }
-  for (const match of text.matchAll(/<skill\s+name=\\?"([a-z0-9][a-z0-9:_-]*)\\?"/gi)) {
-    bump((match[1] ?? "").split(":").at(-1) ?? "", "load");
-  }
-  for (const match of text.matchAll(/skills\/([a-z0-9][a-z0-9_-]*)\/SKILL\.md/gi)) {
-    bump(match[1] ?? "", "fileRead");
-  }
-  usage.delete("");
-  usage.delete("name");
-  return usage;
-}
-
-function scanUsage(skills: Skill[], logFiles: string[]): Map<string, Usage> {
-  const usage = new Map<string, Usage>();
-  for (const skill of skills) usage.set(skill.baseName.toLowerCase(), { command: 0, load: 0, fileRead: 0 });
-  let consumedBytes = 0;
-  for (const file of logFiles) {
-    let text = "";
-    try {
-      const stat = fs.statSync(file);
-      if (stat.size > 150 * 1024 * 1024) continue;
-      if (consumedBytes + stat.size > maxLogBytes) break;
-      consumedBytes += stat.size;
-      text = fs.readFileSync(file, "utf8");
-    } catch {
+  const result = (id: unknown, error: unknown) => {
+    if (typeof id !== "string") return;
+    const request = pending.get(id);
+    if (!request) { records.unmatchedResults++; return; }
+    pending.delete(id);
+    if (error === undefined || error === false) bump(request.name, request.kind);
+  };
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let row: any;
+    try { row = JSON.parse(line); records.parsed++; }
+    catch { records.malformed++; continue; }
+    if (!row || typeof row !== "object" || Array.isArray(row)) { records.unsupported++; continue; }
+    if (typeof row.cwd === "string") cwd = row.cwd;
+    const message = row.message ?? row;
+    if (!message || !["user", "assistant", "toolResult"].includes(message.role)) { records.unsupported++; continue; }
+    records.messages++;
+    const content = typeof message.content === "string" ? [{ type: "text", text: message.content }] : Array.isArray(message.content) ? message.content : [];
+    if (message.role === "toolResult") { result(message.toolCallId, message.isError); continue; }
+    if (message.role === "user") {
+      for (const block of content) {
+        if (block?.type === "tool_result") { result(block.tool_use_id, block.is_error); continue; }
+        if (block?.type !== "text" || typeof block.text !== "string") continue;
+        const text = block.text.trim();
+        const command = /^\/skill:([a-z0-9:_-]+)(?:\s|$)/i.exec(text)
+          ?? /^\/([a-z0-9:_-]+)(?:\s|$)/i.exec(text)
+          ?? /^(?:<command-message>[^<]*<\/command-message>\s*)?<command-name>\/([a-z0-9:_-]+)<\/command-name>/i.exec(text);
+        if (command) bump(command[1]!, "command");
+        const load = /^<skill\s+name="([a-z0-9:_-]+)"\s+location="[^"]+">[\s\S]*<\/skill>(?:\s|$)/i.exec(text);
+        if (load) bump(load[1]!, "load");
+      }
       continue;
     }
-    for (const [name, counts] of parsePiSkillUsage(text)) {
-      const item = usage.get(name);
-      if (!item) continue;
-      item.command += counts.command;
-      item.load += counts.load;
-      item.fileRead += counts.fileRead;
+    for (const block of content) {
+      if (!block || !["toolCall", "tool_use"].includes(block.type) || typeof block.name !== "string") continue;
+      const args = block.arguments ?? block.input;
+      if (!args || typeof args !== "object" || Array.isArray(args)) { records.unclassifiedToolCalls++; continue; }
+      let target: { name: string; kind: "fileRead" | "referenceRead" | "skillResult" } | undefined;
+      if (block.name.toLowerCase() === "read") {
+        target = readTarget(args.path ?? args.file_path, typeof message.cwd === "string" ? message.cwd : cwd, knownPaths);
+        if (target) bump(target.name, target.kind === "fileRead" ? "readRequest" : "referenceRequest");
+        else records.unclassifiedToolCalls++;
+      } else if (block.type === "tool_use" && block.name === "Skill" && typeof args.skill === "string") {
+        target = { name: args.skill, kind: "skillResult" };
+      } else records.unclassifiedToolCalls++;
+      if (target && typeof block.id === "string") pending.set(block.id, target);
     }
   }
   return usage;
 }
 
-function usageTotal(item: Usage | undefined): number {
-  return item ? item.command + item.load + item.fileRead : 0;
+export function scanUsage(skills: Skill[], files: string[], maxBytes: number) {
+  const usage = new Map(skills.map((skill) => [skill.baseName.toLowerCase(), emptyUsage()]));
+  const paths = new Map(skills.flatMap((skill) => [skill.path, skill.realPath].map((file) => [file.replaceAll("\\", "/"), skill.baseName] as const)));
+  const records = emptyRecords();
+  const scannedFiles: string[] = [], skippedFiles: Issue[] = [], errorFiles: Issue[] = [];
+  let bytesRead = 0;
+  for (const file of files) {
+    try {
+      if (maxBytes === 0) { skippedFiles.push({ path: file, reason: "byte-limit" }); continue; }
+      const fd = fs.openSync(file, "r");
+      try {
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile()) throw new Error("not a regular file");
+        if (stat.size > 150 * 1024 * 1024) { skippedFiles.push({ path: file, reason: "oversized" }); continue; }
+        if (bytesRead + stat.size > maxBytes) { skippedFiles.push({ path: file, reason: "byte-limit" }); continue; }
+        // Bound the actual read, even when a live session file grows after stat.
+        const buffer = Buffer.alloc(stat.size);
+        let length = 0;
+        while (length < buffer.length) {
+          const read = fs.readSync(fd, buffer, length, buffer.length - length, null);
+          if (!read) break;
+          length += read;
+          bytesRead += read;
+        }
+        if (length !== stat.size || fs.fstatSync(fd).size !== stat.size) {
+          skippedFiles.push({ path: file, reason: "changed-during-read" }); continue;
+        }
+        scannedFiles.push(file);
+        for (const [name, counts] of parsePiSkillUsage(buffer.toString("utf8"), records, paths)) {
+          const total = usage.get(name);
+          if (total) for (const key of Object.keys(counts) as (keyof Usage)[]) total[key] += counts[key];
+        }
+      } finally { fs.closeSync(fd); }
+    } catch (error) { errorFiles.push({ path: file, reason: errorReason(error) }); }
+  }
+  return { usage, eligibleFiles: files.length, scannedFiles, skippedFiles, errorFiles, bytesRead, records };
 }
-
-function usageForSkill(usage: Map<string, Usage>, skill: Skill): Usage {
-  return usage.get(skill.baseName.toLowerCase()) ?? { command: 0, load: 0, fileRead: 0 };
-}
-
-// ---- Harness-agnostic helpers (kept) ----
 
 export function compactDescription(description: string, maxChars = 110): string {
-  let draft = sanitizeSingleLine(description)
+  let draft = singleLine(description)
     .replace(/^Use this skill alongside ([A-Za-z0-9_.:-]+) when the task involves /i, "$1 + workflow: ")
     .replace(/^Use this skill whenever /i, "")
     .replace(/^Use this skill when /i, "")
     .replace(/^Use when /i, "")
     .replace(/^Trigger whenever the user asks to /i, "")
     .replace(/^This is the preferred workflow skill whenever /i, "")
-    .replace(/\bthe user wants to\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const firstSentence = draft.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
-  if (firstSentence && firstSentence.length >= 35) draft = firstSentence;
+    .replace(/\bthe user wants to\b/gi, "").replace(/\s+/g, " ").trim();
+  const sentence = draft.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
+  if (sentence && sentence.length >= 35) draft = sentence;
   if ([...draft].length <= maxChars) return draft;
   const prefix = [...draft].slice(0, maxChars - 3).join("");
   const boundary = Math.max(prefix.lastIndexOf(";"), prefix.lastIndexOf(","), prefix.lastIndexOf(" "));
   return `${prefix.slice(0, boundary >= maxChars * 0.6 ? boundary : prefix.length).trimEnd()}...`;
 }
 
-function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const value = key(item);
-    map.set(value, [...(map.get(value) ?? []), item]);
-  }
-  return map;
-}
-
-function similarity(a: Skill, b: Skill): { description: number; body: number; overall: number } {
-  const description = jaccard(wordSet(a.description), wordSet(b.description));
-  const body = a.bodyHash === b.bodyHash ? 1 : jaccard(wordSet(a.bodyKey), wordSet(b.bodyKey));
-  return { description, body, overall: body * 0.8 + description * 0.2 };
-}
-
-function formatPct(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatOnePct(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatNumber(value: number): string {
-  return Math.round(value).toLocaleString("en-US");
-}
-
-function tokenCost(text: string): number {
-  return Math.ceil(Buffer.byteLength(text, "utf8") / 4);
-}
-
 function renderSkillLine(skill: Skill, description: string): string {
-  return description
-    ? `- ${skill.name}: ${description} (file: ${skill.renderPath})`
-    : `- ${skill.name}: (file: ${skill.renderPath})`;
+  return `- ${skill.name}:${description ? ` ${description}` : ""} (file: ${skill.path})`;
 }
-
-function renderSkillDescriptionPrefix(skill: Skill, descriptionChars: number): string {
-  if (descriptionChars <= 0) return "";
-  return [...skill.description].slice(0, descriptionChars).join("");
+export function tokenCost(text: string, charsPerToken = 4): number {
+  return Math.ceil([...text].length / charsPerToken);
 }
-
-function lineTokenCost(line: string): number {
-  return tokenCost(`${line}\n`);
-}
-
-function minimumLineTokenCost(skill: Skill): number {
-  return lineTokenCost(renderSkillLine(skill, ""));
-}
-
-function fullLineTokenCost(skill: Skill): number {
-  return lineTokenCost(renderSkillLine(skill, skill.description));
-}
-
-function extraDescriptionCosts(skill: Skill): number[] {
-  const minimumLine = renderSkillLine(skill, "");
-  const minimumBytes = Buffer.byteLength(`${minimumLine}\n`, "utf8");
-  const minimumCost = Math.ceil(minimumBytes / 4);
-  const costs = [0];
-  let prefixBytes = 0;
-  for (const char of skill.description) {
-    prefixBytes += Buffer.byteLength(char, "utf8");
-    const renderedBytes = minimumBytes + prefixBytes + 1;
-    costs.push(Math.ceil(renderedBytes / 4) - minimumCost);
-  }
-  return costs;
-}
-
-// Models a listing budget that truncates least-first (Claude Code's ~1%). Pi
-// loads every description, so `fullTokens` is the Pi reality and the budgeted
-// view is "what Claude Code would keep".
-function budgetedSkillCost(skills: Skill[], budgetTokens: number): {
-  fullTokens: number;
-  minimumTokens: number;
-  budgetedTokens: number;
-  includedSkills: number;
-  omittedSkills: number;
-  truncatedDescriptionChars: number;
-  truncatedDescriptionCount: number;
-} {
-  const ordered = [...skills].sort((a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path));
-  const fullTokens = ordered.reduce((sum, skill) => sum + fullLineTokenCost(skill), 0);
-  if (fullTokens <= budgetTokens) {
-    return {
-      fullTokens,
-      minimumTokens: ordered.reduce((sum, skill) => sum + minimumLineTokenCost(skill), 0),
-      budgetedTokens: fullTokens,
-      includedSkills: ordered.length,
-      omittedSkills: 0,
-      truncatedDescriptionChars: 0,
-      truncatedDescriptionCount: 0,
-    };
-  }
-
-  const minimumTokens = ordered.reduce((sum, skill) => sum + minimumLineTokenCost(skill), 0);
-  if (minimumTokens <= budgetTokens) {
-    const remainingByIndex = ordered.map((skill) => [...skill.description].length);
-    const allocatedByIndex = ordered.map(() => 0);
-    const currentExtraCosts = ordered.map(() => 0);
-    const extraCostsByIndex = ordered.map(extraDescriptionCosts);
-    let remaining = budgetTokens - minimumTokens;
-    while (true) {
-      let changed = false;
-      for (let index = 0; index < ordered.length; index++) {
-        if (allocatedByIndex[index] >= remainingByIndex[index]) continue;
-        const nextChars = allocatedByIndex[index] + 1;
-        const nextCost = extraCostsByIndex[index]?.[nextChars] ?? currentExtraCosts[index];
-        const delta = nextCost - currentExtraCosts[index];
-        if (delta <= remaining) {
-          allocatedByIndex[index] = nextChars;
-          currentExtraCosts[index] = nextCost;
-          remaining -= delta;
-          changed = true;
-        }
-      }
-      if (!changed) break;
-    }
-    const rendered = ordered.map((skill, index) =>
-      renderSkillLine(skill, renderSkillDescriptionPrefix(skill, allocatedByIndex[index] ?? 0))
-    );
-    const truncatedDescriptionChars = ordered.reduce(
-      (sum, skill, index) => sum + Math.max(0, [...skill.description].length - (allocatedByIndex[index] ?? 0)),
-      0,
-    );
-    const truncatedDescriptionCount = ordered.filter(
-      (skill, index) => (allocatedByIndex[index] ?? 0) < [...skill.description].length,
-    ).length;
-    return {
-      fullTokens,
-      minimumTokens,
-      budgetedTokens: rendered.reduce((sum, line) => sum + lineTokenCost(line), 0),
-      includedSkills: ordered.length,
-      omittedSkills: 0,
-      truncatedDescriptionChars,
-      truncatedDescriptionCount,
-    };
-  }
-
-  let budgetedTokens = 0;
-  let includedSkills = 0;
-  let omittedSkills = 0;
-  let truncatedDescriptionChars = 0;
-  let truncatedDescriptionCount = 0;
-  for (const skill of ordered) {
-    const cost = minimumLineTokenCost(skill);
-    if (budgetedTokens + cost <= budgetTokens) {
-      budgetedTokens += cost;
-      includedSkills++;
-    } else {
-      omittedSkills++;
-    }
-    const descriptionChars = [...skill.description].length;
-    truncatedDescriptionChars += descriptionChars;
-    if (descriptionChars > 0) truncatedDescriptionCount++;
-  }
+export function skillBudget(skills: Skill[], charsPerToken = 4, contextTokens: number | null = null, budgetPercent = 1, model = "unspecified") {
+  const full = skills.reduce((sum, skill) => sum + tokenCost(renderSkillLine(skill, skill.description) + "\n", charsPerToken), 0);
+  const minimum = skills.reduce((sum, skill) => sum + tokenCost(renderSkillLine(skill, "") + "\n", charsPerToken), 0);
+  const budgetTokens = contextTokens === null ? null : Math.floor(contextTokens * budgetPercent / 100);
   return {
-    fullTokens,
-    minimumTokens,
-    budgetedTokens,
-    includedSkills,
-    omittedSkills,
-    truncatedDescriptionChars,
-    truncatedDescriptionCount,
+    kind: "hypothetical listing estimate, not a native prompt/context measurement", model,
+    contextTokens, contextSource: contextTokens === null ? "unknown" : "--context-tokens (user-supplied scenario)",
+    charsPerToken, costRule: "ceil(Unicode code points / charsPerToken), per listing line",
+    unbudgetedFullTokens: full, minimumTokens: minimum, budgetPercent, budgetTokens,
+    remainingBudgetTokens: budgetTokens === null ? null : budgetTokens - full,
   };
 }
 
-function skillBudget(skills: Skill[]): Budget {
-  const context = modelContext();
-  const tokenRatio = numberArg(String(charsPerToken), 4);
-  const percent = numberArg(String(budgetPercent), 1);
-  const renderedLineChars = skills.reduce((sum, skill) => sum + skill.lineChars, 0);
-  const budgetTokens = Math.floor(context.tokens * (percent / 100));
-  const cost = budgetedSkillCost(skills, Math.max(1, budgetTokens));
-  return {
-    model,
-    contextTokens: context.tokens,
-    contextSource: context.source,
-    budgetPercent: percent,
-    budgetTokens,
-    renderedLineChars,
-    unbudgetedFullTokens: cost.fullTokens,
-    minimumTokens: cost.minimumTokens,
-    budgetedTokens: cost.budgetedTokens,
-    charsPerToken: tokenRatio,
-    unbudgetedBudgetUsedRatio: cost.fullTokens / budgetTokens,
-    budgetedBudgetUsedRatio: cost.budgetedTokens / budgetTokens,
-    unbudgetedContextUsedRatio: cost.fullTokens / context.tokens,
-    budgetedContextUsedRatio: cost.budgetedTokens / context.tokens,
-    remainingBudgetTokens: budgetTokens - cost.budgetedTokens,
-    includedSkills: cost.includedSkills,
-    omittedSkills: cost.omittedSkills,
-    truncatedDescriptionChars: cost.truncatedDescriptionChars,
-    truncatedDescriptionCount: cost.truncatedDescriptionCount,
-  };
+function words(text: string): Set<string> { return new Set(normalizeWords(text).split(" ").filter((word) => word.length >= 2)); }
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (!a.size && !b.size) return 1;
+  let intersection = 0;
+  for (const word of a) if (b.has(word)) intersection++;
+  return intersection / (a.size + b.size - intersection);
 }
 
-function isLikelyCopy(score: { description: number; body: number }): boolean {
-  return score.body >= 0.95 || (score.body >= 0.85 && score.description >= 0.85);
-}
-
-function render(
-  discovered: Skill[],
-  primary: Skill[],
-  usage: Map<string, Usage>,
-  logFiles: string[],
-): string {
-  const visible = primary.filter((skill) => skill.modelInvocable);
-  const hidden = primary.filter((skill) => !skill.modelInvocable);
-  const considered = includeAll ? primary : visible;
-  const roots = groupBy(discovered, (skill) => skill.root);
-
-  // Duplicates: group by name across roots. Identical copies across deploy roots
-  // are expected (one skill deployed); only flag groups whose bodies DIVERGE
-  // (source vs deployed drift, or a real name collision).
-  const byBase = [...groupBy(discovered, (skill) => skill.baseName.toLowerCase()).entries()]
-    .map(([name, list]) => [name, list, new Set(list.map((skill) => skill.bodyHash))] as const)
-    .filter(([, list]) => list.length > 1);
-  const drift = byBase.filter(([, , hashes]) => hashes.size > 1);
-
-  const longDescriptions = considered
-    .filter((skill) => skill.descChars >= 110 || skill.lineChars >= 180)
-    .sort((a, b) => b.descChars - a.descChars)
-    .slice(0, 30);
-  const unused = visible
-    .filter((skill) => usageTotal(usage.get(skill.baseName.toLowerCase())) === 0)
-    .sort((a, b) => a.scope.localeCompare(b.scope) || a.name.localeCompare(b.name))
-    .slice(0, 80);
-  const totalLineChars = considered.reduce((sum, skill) => sum + skill.lineChars, 0);
-  const totalDescChars = considered.reduce((sum, skill) => sum + skill.descChars, 0);
-  const budget = skillBudget(considered);
-  const lines: string[] = [];
-  lines.push("# Skill Cleaner Report", "");
-  lines.push(`generated: ${new Date().toISOString()}`);
-  lines.push(`months: ${months}`);
-  lines.push(`visibility_source: disable-model-invocation frontmatter`);
-  lines.push(`budget_root: ${budgetRoot}`);
-  lines.push(
-    `skills: ${discovered.length} discovered, ${primary.length} unique, ${visible.length} model-visible, ${hidden.length} user-invoked`,
-  );
-  lines.push(`description_chars: ${totalDescChars}`);
-  lines.push(`rendered_line_chars: ${totalLineChars}`);
-  lines.push(`log_files_scanned: ${logFiles.length}`, "");
-
-  lines.push("## Skill Budget", "");
-  lines.push(`model: ${budget.model}`);
-  lines.push(`context_tokens: ${formatNumber(budget.contextTokens)}`);
-  lines.push(`context_source: ${budget.contextSource}`);
-  lines.push(`${budget.budgetPercent}%_budget_tokens: ${formatNumber(budget.budgetTokens)}`);
-  lines.push(`cost_rule: ceil(utf8_bytes / ${budget.charsPerToken})`);
-  lines.push(`full_tokens_pi_loads_all: ${formatNumber(budget.unbudgetedFullTokens)}`);
-  lines.push(`minimum_no_description_tokens: ${formatNumber(budget.minimumTokens)}`);
-  lines.push(`budgeted_tokens_claude_1pct: ${formatNumber(budget.budgetedTokens)}`);
-  lines.push(`full_used_of_budget: ${formatOnePct(budget.unbudgetedBudgetUsedRatio)}`);
-  lines.push(`full_used_of_context: ${formatOnePct(budget.unbudgetedContextUsedRatio)}`);
-  lines.push(`remaining_budget_tokens: ${formatNumber(budget.remainingBudgetTokens)}`);
-  lines.push(`included_after_budget: ${budget.includedSkills}`);
-  lines.push(`omitted_after_budget: ${budget.omittedSkills}`);
-  lines.push(`truncated_description_chars: ${formatNumber(budget.truncatedDescriptionChars)}`, "");
-
-  lines.push("## User-Invoked (hidden from model prompt)", "");
-  for (const skill of hidden.sort((a, b) => a.name.localeCompare(b.name))) {
-    lines.push(`- ${skill.name}: ${skill.scope}; ${skill.path}`);
-  }
-  if (hidden.length === 0) lines.push("- none");
-  lines.push("");
-
-  lines.push("## Description Candidates", "");
-  for (const skill of longDescriptions) {
-    lines.push(`- ${skill.name}`);
-    lines.push(`  path: ${skill.path}`);
-    lines.push(`  chars: description=${skill.descChars}, rendered_line=${skill.lineChars}`);
-    lines.push(`  current: ${skill.description}`);
-    lines.push(`  draft: ${compactDescription(skill.description)}`);
-  }
-  if (longDescriptions.length === 0) lines.push("- none");
-  lines.push("");
-
-  lines.push("## Source/Deploy Drift (same name, different body)", "");
-  for (const [name, list] of drift.slice(0, 40)) {
-    lines.push(`- ${name}`);
-    const keep = preferredKeepSkill(list);
-    lines.push(`  source-of-truth: ${keep.scope}: ${keep.path}`);
-    for (const skill of list) {
-      if (skill.realPath === keep.realPath) continue;
-      const score = similarity(keep, skill);
-      const tag = isLikelyCopy(score) ? "stale-deploy?" : "different-skill?";
-      lines.push(
-        `  ${tag}: ${skill.scope}: ${skill.path} (body=${formatPct(score.body)}, description=${formatPct(score.description)})`,
-      );
+function render(report: ReturnType<typeof analyze>): string {
+  const { skills, primary, budget, logScan, inventoryIssues, logDiscoveryIssues } = report;
+  const lines = ["# Skill Cleaner Report", "", `generated: ${report.generated}`, `months: ${report.months}`,
+    `inventory_source: ${report.inventorySource}`, `effective_selection: ${report.effectiveSelection}`,
+    "Package/CLI/trust overrides are not reconstructed. Project .claude/skills and package skill roots require explicit --root scope.",
+    `comparison_root: ${report.budgetRoot} (not host precedence or ownership)`,
+    `skills: ${skills.length} physical files, ${primary.length} name groups, ${report.modelVisible.length} listing-eligible by frontmatter, ${report.userInvoked.length} hidden from discovery by frontmatter`,
+    `log_scope: ${report.logScope}`, `log_files_eligible: ${logScan.eligibleFiles}`,
+    `log_files_scanned: ${logScan.scannedFiles.length}`, `log_files_skipped: ${logScan.skippedFiles.length}`,
+    `log_files_error: ${logScan.errorFiles.length}`, `log_bytes_read: ${logScan.bytesRead}`,
+    `log_records: ${JSON.stringify(logScan.records)}`, "",
+    "## Listing Estimate (not actual context or behavioral validation)", "",
+    `cost_rule: ${budget.costRule}; ratio=${budget.charsPerToken}`,
+    `full_listing_tokens_estimate: ${budget.unbudgetedFullTokens}`, `minimum_no_description_tokens_estimate: ${budget.minimumTokens}`,
+    `context_tokens: ${budget.contextTokens ?? "unknown"}`, `context_source: ${budget.contextSource}`,
+    `scenario_budget_tokens: ${budget.budgetTokens ?? "not specified"}`, `scenario_remaining_tokens: ${budget.remainingBudgetTokens ?? "unknown"}`,
+    "No native truncation/selection algorithm is simulated.",
+    `direct_body_tokens_estimate_if_all_comparison_bodies_read: ${report.payloadEvidence.directBodies.estimatedTokens}`,
+    `references: ${report.payloadEvidence.references}`, `inherited_context: ${report.payloadEvidence.inheritedContext}`,
+    `repeated_injection: ${report.payloadEvidence.repeatedInjection}`, "",
+    "## Hidden from Discovery (not inaccessible)", ""];
+  for (const skill of primary.filter((skill) => !skill.modelInvocable)) lines.push(`- ${skill.name}: ${skill.path}`);
+  if (!report.userInvoked.length) lines.push("- none");
+  lines.push("", "## Description Candidates", "");
+  const long = primary.filter((skill) => (report.includeAll || skill.modelInvocable) && (skill.descChars >= 110 || skill.lineChars >= 180))
+    .sort((a, b) => b.descChars - a.descChars);
+  for (const skill of long.slice(0, 30)) lines.push(`- ${skill.name}: ${skill.path}`, `  current: ${skill.description}`, `  draft (review required): ${compactDescription(skill.description)}`);
+  if (!long.length) lines.push("- none");
+  if (long.length > 30) lines.push(`- ${long.length - 30} further description candidates; full definitions in --json`);
+  lines.push("", "## Source/Deploy Drift (inventoried definitions only)", "");
+  let differences = 0;
+  for (const [name, copies] of groupBy(skills, (skill) => skill.baseName.toLowerCase())) {
+    const definition = (skill: Skill) => JSON.stringify([skill.bodyHash, skill.description, skill.modelInvocable]);
+    if (new Set(copies.map(definition)).size < 2) continue;
+    differences++;
+    const base = comparisonBase(copies, report.budgetRoot);
+    lines.push(`- ${name}`, `  comparison-base (heuristic): ${base.path}`);
+    for (const skill of copies) {
+      if (definition(skill) === definition(base)) continue;
+      lines.push(`  differs: ${skill.path}; body-word similarity=${Math.round(jaccard(words(base.bodyKey), words(skill.bodyKey)) * 100)}% (not identity)`);
     }
   }
-  if (drift.length === 0) lines.push("- none (deployed copies match source)");
-  lines.push("");
-
-  lines.push("## Unused Candidates (model-visible, no recent use)", "");
-  for (const skill of unused) {
-    const item = usageForSkill(usage, skill);
-    lines.push(
-      `- ${skill.name}: ${skill.scope}; command=${item.command}, load=${item.load}, reads=${item.fileRead}; ${skill.path}`,
-    );
+  if (!differences) lines.push("- no differing inventoried definitions; omitted deployments are not certified");
+  lines.push("", "## No Observed Use (not evidence of disuse)", "", report.usageAttribution);
+  if (logScan.records.messages === 0) lines.push("- no applicable message evidence; do not infer unused skills");
+  else {
+    const missing = primary.filter((skill) => skill.modelInvocable && Object.values(report.usage[skill.baseName.toLowerCase()] ?? emptyUsage()).every((count) => count === 0));
+    for (const skill of missing.slice(0, 80)) lines.push(`- ${skill.name}: ${skill.path}`);
+    if (!missing.length) lines.push("- none among the compared names");
+    if (missing.length > 80) lines.push(`- ${missing.length - 80} further names with no observed use; full definitions and usage in --json`);
   }
-  if (unused.length === 0) lines.push("- none");
-  lines.push("");
-
-  lines.push("## Root Summary", "");
-  for (const [root, list] of [...roots.entries()].sort((a, b) => b[1].length - a[1].length)) {
-    const userInvoked = list.filter((skill) => !skill.modelInvocable).length;
-    lines.push(`- ${root}: ${list.length} skills${userInvoked ? `, ${userInvoked} user-invoked` : ""}`);
-  }
+  lines.push("", "## Coverage Issues", "");
+  const issues = [...inventoryIssues, ...logDiscoveryIssues, ...logScan.skippedFiles, ...logScan.errorFiles];
+  for (const issue of issues.slice(0, 80)) lines.push(`- ${issue.reason}: ${issue.path}`);
+  if (!issues.length) lines.push("- no I/O issues in the selected scope; runtime selection remains unknown");
+  if (issues.length > 80) lines.push(`- ${issues.length - 80} further issues; use --json for all`);
+  lines.push("", "## Root Summary", "");
+  for (const [root, files] of groupBy(skills, (skill) => skill.root)) lines.push(`- ${root}: ${files.length} physical skills`);
   return lines.join("\n");
 }
 
-function main(): void {
-  if (rootOnly && extraRoots.length === 0) {
-    console.error("skill-cleaner: --root-only requires at least one --root <path>");
-    process.exitCode = 2;
-    return;
+const HELP = `Usage: bun skill-cleaner.ts [options]
+  --root PATH (repeatable) --root-only  Limit inventory to explicit skill roots
+  --budget-root PATH                  Choose a comparison base, not host precedence
+  --no-logs                           Do not read session logs
+  --log-root PATH (repeatable)         Replace default Pi/Claude log roots
+  --months N --max-log-mb N            Recency window and total read budget (zero allowed)
+  --chars-per-token N                  Approximate Unicode characters per token (default 4)
+  --context-tokens N --budget-percent N  Optional hypothetical context budget
+  --model LABEL                       Label for that scenario, not active model discovery
+  --scan-projects                     Also inventory skill roots under ~/Projects
+  --all --json --help
+No configuration, collected history, or native loader is written. Unknown selection stays unknown.`;
+
+function analyze(options: { roots: string[]; rootOnly: boolean; budgetRoot: string; noLogs: boolean; logRoots: string[]; months: number; maxBytes: number; ratio: number; contextTokens: number | null; budgetPercent: number; model: string; scanProjects: boolean; includeAll: boolean }) {
+  const inventoryIssues: Issue[] = [], logDiscoveryIssues: Issue[] = [];
+  const roots = discoverRoots(os.homedir(), options.roots, options.rootOnly, inventoryIssues, options.scanProjects);
+  const skills = discoverSkills(roots, inventoryIssues);
+  const primary = [...groupBy(skills, (skill) => skill.baseName.toLowerCase()).values()]
+    .map((group) => comparisonBase(group, options.budgetRoot)).sort((a, b) => a.name.localeCompare(b.name));
+  const logRoots = options.logRoots.length ? options.logRoots : [path.join(os.homedir(), ".pi/agent/sessions"), path.join(os.homedir(), ".claude/projects")].filter(fs.existsSync);
+  const files = options.noLogs ? [] : [...new Set(logRoots.flatMap((root) => walkRecentFiles(path.resolve(expandHome(root)), Date.now() - options.months * 31 * 24 * 60 * 60 * 1000, logDiscoveryIssues)))].sort();
+  const scanned = scanUsage(skills, files, options.maxBytes);
+  const { usage, ...logScan } = scanned;
+  return {
+    generated: new Date().toISOString(), months: options.months, roots, skills, primary,
+    inventorySource: "filesystem inventory; canonical aliases coalesced",
+    effectiveSelection: "unknown (no live/exported host inventory supplied)",
+    visibilitySource: "frontmatter eligibility only, not effective loading",
+    modelVisible: primary.filter((skill) => skill.modelInvocable).map((skill) => skill.name),
+    userInvoked: primary.filter((skill) => !skill.modelInvocable).map((skill) => skill.name),
+    payloadEvidence: {
+      discovery: "frontmatter eligibility and estimated listing only; actual injected discovery unknown",
+      directBodies: { characters: primary.reduce((sum, skill) => sum + skill.bodyChars, 0), estimatedTokens: primary.reduce((sum, skill) => sum + Math.ceil(skill.bodyChars / options.ratio), 0) },
+      references: "referenceRequest/referenceRead counts only for known skill directories; payload cost not measured",
+      repeatedInjection: "load counts serialized body envelopes; skillResult counts successful Skill results separately; duplication and retained context unknown",
+      inheritedContext: "unknown; summaries, forks and cached context are not reconstructed",
+    },
+    usageAttribution: "Name-level recorded signals across inventoried copies, not proof that the comparison copy was loaded. User commands, body envelopes (load), Skill results, body requests/results and reference requests/results remain separate. Bash/search/other indirect reads and unsupported records are not usage proof; partial reads need not contain a whole body.",
+    usage: Object.fromEntries(usage), logFiles: files, logScan,
+    logScope: options.noLogs ? "disabled" : logRoots,
+    inventoryIssues, logDiscoveryIssues, budgetRoot: options.budgetRoot, includeAll: options.includeAll,
+    budget: skillBudget(primary.filter((skill) => options.includeAll || skill.modelInvocable), options.ratio, options.contextTokens, options.budgetPercent, options.model),
+  };
+}
+
+function main() {
+  const { values } = parseArgs({ options: {
+    root: { type: "string", multiple: true }, "root-only": { type: "boolean" },
+    "budget-root": { type: "string" }, "no-logs": { type: "boolean" }, "log-root": { type: "string", multiple: true },
+    months: { type: "string", default: "3" }, "max-log-mb": { type: "string", default: "300" },
+    "chars-per-token": { type: "string", default: "4" }, "context-tokens": { type: "string" },
+    "budget-percent": { type: "string", default: "1" }, model: { type: "string", default: "unspecified" },
+    "scan-projects": { type: "boolean" }, all: { type: "boolean" }, json: { type: "boolean" }, help: { type: "boolean", short: "h" },
+  } });
+  if (values.help) { console.log(HELP); return; }
+  const number = (value: string, name: string, zero = false) => {
+    const parsed = Number(value);
+    if (!value.trim() || !Number.isFinite(parsed) || (zero ? parsed < 0 : parsed <= 0)) throw new Error(`${name} must be ${zero ? "nonnegative" : "positive"} and finite.`);
+    return parsed;
+  };
+  if (values["root-only"] && !values.root?.length) throw new Error("--root-only requires at least one --root <path>");
+  for (const root of [...(values.root ?? []), ...(values["log-root"] ?? [])]) {
+    if (!root.trim()) throw new Error("Explicit root paths must be nonempty.");
   }
-  const skills = discoverSkills();
-  const primary = primarySkills(skills);
-  const logFiles = recentLogFiles();
-  const usage = scanUsage(primary, logFiles);
-  const considered = includeAll ? primary : primary.filter((skill) => skill.modelInvocable);
-  const budget = skillBudget(considered);
-  const output = json
-    ? JSON.stringify(
-        {
-          skills,
-          primary,
-          modelVisible: primary.filter((skill) => skill.modelInvocable).map((skill) => skill.name),
-          userInvoked: primary.filter((skill) => !skill.modelInvocable).map((skill) => skill.name),
-          visibilitySource: "disable-model-invocation frontmatter",
-          usage: Object.fromEntries(usage),
-          logFiles,
-          budget,
-        },
-        null,
-        2,
-      )
-    : render(skills, primary, usage, logFiles);
-  console.log(output);
+  const report = analyze({
+    roots: values.root ?? [], rootOnly: values["root-only"] ?? false,
+    budgetRoot: path.resolve(expandHome(values["budget-root"] ?? path.join(os.homedir(), ".agents/skills"))),
+    noLogs: values["no-logs"] ?? false, logRoots: values["log-root"] ?? [],
+    months: number(values.months!, "--months", true), maxBytes: number(values["max-log-mb"]!, "--max-log-mb", true) * 1024 * 1024,
+    ratio: number(values["chars-per-token"]!, "--chars-per-token"),
+    contextTokens: values["context-tokens"] === undefined ? null : number(values["context-tokens"], "--context-tokens"),
+    budgetPercent: number(values["budget-percent"]!, "--budget-percent"), model: values.model!,
+    scanProjects: values["scan-projects"] ?? false, includeAll: values.all ?? false,
+  });
+  console.log(values.json ? JSON.stringify(report, null, 2) : render(report));
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  main();
+  try { main(); }
+  catch (error) { console.error(`skill-cleaner: ${errorReason(error)}`); process.exitCode = 2; }
 }

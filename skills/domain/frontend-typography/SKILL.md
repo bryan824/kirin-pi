@@ -26,7 +26,10 @@ behavior.
   IDs, and labels. `frontend-layout` keeps those lanes shrinkable and reachable;
   this skill keeps their text readable without overflow or accidental loss.
 
-For selected edge cases, read [REFERENCE.md](REFERENCE.md). For a holistic
-frontend review, contribute typography evidence to the
-[shared review contract](../frontend-design/references/REVIEW.md); it owns the
-consolidated review.
+For selected edge cases, read [REFERENCE.md](REFERENCE.md).
+
+When `frontend-design` is installed, use its
+[shared review contract](../frontend-design/references/REVIEW.md). Otherwise report
+focused typography findings, exact evidence, user impact and verification gaps
+directly. Review-only requests stay read-only; do not install siblings or duplicate
+the full review schema.

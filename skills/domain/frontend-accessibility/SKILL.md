@@ -28,6 +28,8 @@ and ARIA used to disguise a semantic mismatch.
 - Read [edge cases](REFERENCE.md) when a native/default choice is unclear;
   test the actual assistive and input paths the product supports.
 
-For holistic review, hand accessibility findings and verification evidence to
-the [shared review contract](../frontend-design/references/REVIEW.md); do not
-create a parallel review schema.
+When `frontend-design` is installed, use its
+[shared review contract](../frontend-design/references/REVIEW.md). Otherwise report
+focused accessibility findings, exact evidence, user impact and verification gaps
+directly. Review-only requests stay read-only; do not install siblings or duplicate
+the full review schema.

@@ -31,6 +31,8 @@ explicitly the task.
 For non-obvious compositing and gamut cases, read
 [references/REFERENCE.md](references/REFERENCE.md).
 
-For a holistic review, hand evidence and findings to the
-[shared review contract](../frontend-design/references/REVIEW.md); use its schema
-rather than creating one here.
+When `frontend-design` is installed, use its
+[shared review contract](../frontend-design/references/REVIEW.md). Otherwise report
+focused color findings, exact evidence, user impact and verification gaps directly.
+Review-only requests stay read-only; do not install siblings or duplicate the full
+review schema.

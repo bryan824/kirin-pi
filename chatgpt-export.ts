@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -29,9 +30,12 @@ export function normalizeInputPath(inputPath: string | undefined, cwd: string): 
 }
 
 function getAttribute(html: string, name: string): string | undefined {
-	const pattern = new RegExp(`${name}=(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i");
-	const match = pattern.exec(html);
-	return decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? "") || undefined;
+	for (const match of html.matchAll(/([^\s=<>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g)) {
+		if (match[1].toLowerCase() === name.toLowerCase()) {
+			return decodeHtmlEntities(match[2] ?? match[3] ?? match[4] ?? "") || undefined;
+		}
+	}
+	return undefined;
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -40,11 +44,10 @@ function decodeHtmlEntities(text: string): string {
 			if (entity[0] === "#") {
 				const isHex = entity[1]?.toLowerCase() === "x";
 				const codePoint = Number.parseInt(entity.slice(isHex ? 2 : 1), isHex ? 16 : 10);
-				return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : full;
+				return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : full;
 			}
-			return ({ amp: "&", apos: "'", gt: ">", lt: "<", nbsp: " ", quot: '"' } as Record<string, string>)[entity.toLowerCase()] ?? full;
-		})
-		.replace(/\u00a0/g, " ");
+			return ({ amp: "&", apos: "'", gt: ">", lt: "<", nbsp: "\u00a0", quot: '"' } as Record<string, string>)[entity.toLowerCase()] ?? full;
+		});
 }
 
 function stripTags(fragment: string): string {
@@ -70,19 +73,38 @@ function inlineMarkdown(fragment: string): string {
 }
 
 function htmlCodeToText(fragment: string): string {
-	return stripTags(fragment).replace(/\n{3,}/g, "\n\n").trimEnd();
+	// Strip export markup before decoding: decoded literal HTML is code, not tags.
+	return decodeHtmlEntities(fragment.replace(/<br\s*\/?\s*>/gi, "\n").replace(/<[^>]+>/g, ""));
+}
+
+function codeFence(text: string, minimum: number): string {
+	return "`".repeat((text.match(/`+/g) ?? []).reduce((size, run) => Math.max(size, run.length + 1), minimum));
 }
 
 function htmlToMarkdown(contentHtml: string): string {
-	let text = contentHtml.replace(/<pre\b[\s\S]*?<code\b[^>]*>([\s\S]*?)<\/code>[\s\S]*?<\/pre>/gi, (_full, code) => {
-		return `\n\n\`\`\`\n${htmlCodeToText(code)}\n\`\`\`\n\n`;
-	});
-
-	text = text
+	const code: string[] = [];
+	const nonce = randomUUID();
+	const protect = (value: string) => `\uE000${nonce}:${code.push(value) - 1}\uE001`;
+	// Restore code only after prose cleanup, so whitespace and decoded entities survive.
+	let text = contentHtml
 		.replace(/<script\b[\s\S]*?<\/script>/gi, "")
 		.replace(/<style\b[\s\S]*?<\/style>/gi, "")
 		.replace(/<svg\b[\s\S]*?<\/svg>/gi, "")
 		.replace(/<button\b[\s\S]*?<\/button>/gi, "")
+		.replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, (_full, inner: string) => {
+			const value = htmlCodeToText(/<code\b[^>]*>([\s\S]*?)<\/code>/i.exec(inner)?.[1] ?? inner);
+			const fence = codeFence(value, 3);
+			return `\n\n${protect(`${fence}\n${value}${value.endsWith("\n") ? "" : "\n"}${fence}`)}\n\n`;
+		})
+		.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_full, inner: string) => {
+			const value = htmlCodeToText(inner);
+			if (!value) return "";
+			const fence = codeFence(value, 1);
+			const pad = /^`|`$|^ | $/.test(value) && /[^ ]/.test(value) ? " " : "";
+			return protect(`${fence}${pad}${value}${pad}${fence}`);
+		});
+
+	text = text
 		.replace(/<span\b[^>]*data-testid=(?:"webpage-citation-pill"|'webpage-citation-pill'|webpage-citation-pill)[\s\S]*?<\/span>\s*<\/span>/gi, "")
 		.replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, (_full, inner) => `\n# ${inlineMarkdown(inner)}\n\n`)
 		.replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, (_full, inner) => `\n## ${inlineMarkdown(inner)}\n\n`)
@@ -94,7 +116,6 @@ function htmlToMarkdown(contentHtml: string): string {
 		.replace(/<br\s*\/?\s*>/gi, "\n")
 		.replace(/<\/p>/gi, "\n\n")
 		.replace(/<p\b[^>]*>/gi, "")
-		.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_full, code) => `\`${stripTags(code).trim()}\``)
 		.replace(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi, "**$1**")
 		.replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "**$1**")
 		.replace(/<em\b[^>]*>([\s\S]*?)<\/em>/gi, "_$1_")
@@ -103,12 +124,14 @@ function htmlToMarkdown(contentHtml: string): string {
 		.replace(/<[^>]+>/g, "");
 
 	return decodeHtmlEntities(text)
+		.replace(/\u00a0/g, " ")
 		.split("\n")
 		.map((line) => line.replace(/[ \t]+$/g, ""))
 		.join("\n")
 		.replace(/\n{4,}/g, "\n\n\n")
 		.replace(/[ \t]{2,}/g, " ")
-		.trim();
+		.trim()
+		.replace(new RegExp(`\uE000${nonce}:(\\d+)\uE001`, "g"), (_full, index) => code[Number(index)]!);
 }
 
 function extractBalancedElement(block: string, startIndex: number, tagName: string): string | undefined {
@@ -140,10 +163,15 @@ export function parseChatGptExportHtml(html: string, sourcePath: string): Parsed
 	const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
 	const sourceUrlMatch = /url:\s*(\S+)/i.exec(html);
 	const savedDateMatch = /saved date:\s*([^\n\r<]+)/i.exec(html);
-	const rolePattern = /data-message-author-role=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
-	const turns: Array<{ role: string; index: number }> = [];
+	// Read roles only from real opening tags, not code text, quoted attributes or scripts.
+	html = html.replace(/<!--[\s\S]*?-->|<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>/gi, "");
+	const tagPattern = /<[a-z][\w:-]*\b(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi;
+	const turns: Array<{ role: string; index: number; tag: string }> = [];
 	let match: RegExpExecArray | null;
-	while ((match = rolePattern.exec(html))) turns.push({ role: match[1] ?? match[2] ?? match[3] ?? "unknown", index: match.index });
+	while ((match = tagPattern.exec(html))) {
+		const role = getAttribute(match[0], "data-message-author-role");
+		if (role) turns.push({ role, index: match.index, tag: match[0] });
+	}
 
 	const messages: ChatGptMessage[] = [];
 	for (let index = 0; index < turns.length; index += 1) {
@@ -153,8 +181,8 @@ export function parseChatGptExportHtml(html: string, sourcePath: string): Parsed
 		if (!text) continue;
 		messages.push({
 			role: turn.role,
-			id: getAttribute(block, "data-message-id"),
-			model: getAttribute(block, "data-message-model-slug"),
+			id: getAttribute(turn.tag, "data-message-id"),
+			model: getAttribute(turn.tag, "data-message-model-slug"),
 			text,
 		});
 	}
@@ -193,6 +221,25 @@ export function renderExport(parsed: ParsedChatGptExport, format: ChatGptExportF
 	return format === "json" ? `${JSON.stringify(parsed, null, 2)}\n` : renderMarkdown(parsed);
 }
 
+export async function writeExportOutput(sourcePath: string, outputPath: string, content: string): Promise<void> {
+	const source = await stat(sourcePath);
+	const isInput = (info: { dev: number; ino: number }) => info.dev === source.dev && info.ino === source.ino;
+	const existing = await stat(outputPath).catch((error) => {
+		if (error.code !== "ENOENT") throw error;
+		return undefined;
+	});
+	if (existing && isInput(existing)) throw new Error("Output must not overwrite the input export (including file aliases).");
+	await mkdir(path.dirname(outputPath), { recursive: true });
+	// Open without truncation, then check the actual file before writing. A changed
+	// symlink cannot redirect the later write onto an unchecked input inode.
+	const output = await open(outputPath, "a");
+	try {
+		if (isInput(await output.stat())) throw new Error("Output must not overwrite the input export (including file aliases).");
+		await output.truncate(0);
+		await output.writeFile(content, "utf8");
+	} finally { await output.close(); }
+}
+
 export async function runCli(argv = process.argv.slice(2), cwd = process.cwd()): Promise<string> {
 	const { values, positionals } = parseArgs({
 		args: argv,
@@ -213,8 +260,7 @@ export async function runCli(argv = process.argv.slice(2), cwd = process.cwd()):
 	const output = renderExport(parsed, values.format);
 	if (!values.output) return output;
 	const outputPath = path.resolve(cwd, values.output.replace(/^@/, ""));
-	await mkdir(path.dirname(outputPath), { recursive: true });
-	await writeFile(outputPath, output, "utf8");
+	await writeExportOutput(sourcePath, outputPath, output);
 	return `Saved ${outputPath}\n`;
 }
 

@@ -5,23 +5,20 @@ description: "When ending a session or switching agents — leave only the resum
 
 # Session Close
 
-Close cleanly, without turning the session into a diary.
+Leave a recoverable next step, not a diary.
 
-When delegated work already has a durable runtime record, use its status,
-decisions, and artifact links as the resume record instead of creating a duplicate handoff.
+Reuse the existing effort or runtime record. Only create a handoff when needed
+context would otherwise be lost: approved scope, decisions, changed files,
+verification evidence, blockers, artifact/worktree identities and the next action.
+Native resume/fork/compaction may already carry the thread; a portable file earns
+its keep when the destination cannot. Link existing artifacts instead of copying
+them, and check that the recipient can reach the paths. Separate completed work
+from proposed or unverified work; redact secrets.
 
-Create a handoff only when work must resume elsewhere without such a record. Write `context/sessions/<date>-<slug>.md` with:
+A reusable lesson belongs in its owning code, test, skill or current doc when
+that edit is authorized. Otherwise propose the correction. Do not create a second
+reflection beside an adequate record, or clean up user records on the way out.
+Recheck referenced files and commits when resuming; a handoff can be stale.
 
-- goal and current approved plan/unit
-- decisions and contracts
-- completed work and changed files
-- verification commands and results
-- blockers, risks, and exact next step
-
-Re-verify referenced files and commits when resuming; a handoff is evidence, not truth.
-
-Create a reflection only when this session exposed a recurring correction, surprise, or reusable win not already captured by code, tests, or docs. Write `.pi/reflections/<date>-<slug>.md` with what happened, root cause, and smallest proposed durable fix. Do not apply that fix here.
-
-Project facts belong in current docs. Tactical fixes belong in code or tasks. Secrets are redacted. If neither handoff nor reflection is earned, write nothing and say so.
-
-Deliver: created paths or explicit no-record verdict, plus the next action if work continues.
+Deliver: the updated record or an explicit no-record result, plus the next action
+if work continues. When nothing would be lost, write nothing.

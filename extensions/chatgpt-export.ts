@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -19,6 +19,7 @@ import {
 	normalizeInputPath,
 	parseChatGptExportHtml,
 	renderExport,
+	writeExportOutput,
 	type ChatGptExportFormat,
 } from "../chatgpt-export.ts";
 
@@ -49,10 +50,9 @@ const ChatGptExportParams = Type.Object({
 	})),
 }, { additionalProperties: false });
 
-async function writeOutputFile(outputPath: string, content: string, cwd: string): Promise<string> {
+async function writeOutputFile(sourcePath: string, outputPath: string, content: string, cwd: string): Promise<string> {
 	const normalized = path.resolve(cwd, outputPath.replace(/^@/, ""));
-	await mkdir(path.dirname(normalized), { recursive: true });
-	await withFileMutationQueue(normalized, async () => writeFile(normalized, content, "utf8"));
+	await withFileMutationQueue(normalized, () => writeExportOutput(sourcePath, normalized, content));
 	return normalized;
 }
 
@@ -78,13 +78,13 @@ export default function chatGptExportExtension(pi: ExtensionAPI) {
 				params.maxMessages ?? DEFAULT_MAX_MESSAGES,
 			);
 			const output = renderExport(parsed, format);
-			let outputPath = params.outputPath ? await writeOutputFile(params.outputPath, output, ctx.cwd) : undefined;
+			let outputPath = params.outputPath ? await writeOutputFile(sourcePath, params.outputPath, output, ctx.cwd) : undefined;
 			const truncation = truncateHead(output, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
 			let resultText = truncation.content;
 
 			if (truncation.truncated && !outputPath) {
 				const tempDir = await mkdtemp(path.join(tmpdir(), "pi-chatgpt-export-"));
-				outputPath = await writeOutputFile(path.join(tempDir, `chatgpt-export.${format === "json" ? "json" : "md"}`), output, ctx.cwd);
+				outputPath = await writeOutputFile(sourcePath, path.join(tempDir, `chatgpt-export.${format === "json" ? "json" : "md"}`), output, ctx.cwd);
 			}
 			if (truncation.truncated) {
 				resultText += `\n\n[Output truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`;

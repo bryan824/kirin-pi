@@ -5,55 +5,33 @@ description: "A check fails or behavior is wrong and the cause isn't obvious —
 
 # Debug
 
-Find the cause before changing code. A bug you can't reproduce you can't fix;
-a fix without proof is not a fix.
+Find the causal defect, not just a patch that hides the symptom.
 
-Resist: patching the symptom, changing several things at once, calling it fixed
-without re-running the failing check.
+- Capture a pass/fail signal for the reported behavior. Preserve the original
+  scenario while shrinking a reproduction; the small case must still explain it.
+  For intermittent failures, record conditions and observed frequency instead of
+  imposing an arbitrary flake threshold. If reproduction is unavailable, seek
+  decisive traces and name what remains unproven.
+- Trace callers, state, guards, sinks and configuration. Compare known-good
+  behavior and recent changes when available. Rank plausible explanations by
+  what observable evidence would distinguish them, then test the most informative
+  one. Change one causal variable at a time where possible.
+- Keep probes identifiable. Probes and cleanup need write authority, not merely
+  ownership. Tool acceptance does not expand the user's writable set. Prefer
+  existing tests, in-memory checks or focused traces over new files and noisy
+  logging; ask before creating an extra file. Measure performance against a
+  comparable baseline. Redact secrets before sharing commands, logs or artifacts,
+  and say when redaction limits diagnosis.
+- Fix the shared cause where it belongs and inspect sibling callers. Do not
+  compensate separately in every path or keep retrying an unchanged theory.
+  Repeated failure calls for a new hypothesis, decomposition or escalation—not a
+  success verdict because an attempt budget ran out.
+- Re-run the exact original signal and relevant regression checks. Assert the
+  visible result, not merely that nothing threw. Inspect the real rendered/output
+  surface for visual or generated-artifact bugs; synthetic checks alone leave that
+  requirement unverified. If no honest test seam exists, report the design gap.
 
-- Reproduce first — build a fast, deterministic pass/fail signal that asserts the
-  user's exact symptom (not merely "runs without erroring") and run it once to
-  watch it fail. That signal is most of the fix; bisection, hypotheses, and
-  instrumentation all just consume it. For an intermittent bug the goal is a
-  higher reproduction rate rather than a clean repro — a 50% flake is debuggable, 1% is not. If you can't build one, stop
-  and ask for artifacts (logs, traces, a recording) instead of hypothesizing blind.
-- Once it goes red, shrink the repro until every remaining element is load-bearing
-  and removing any one turns it green. That minimal repro is what collapses the
-  hypothesis space, and what the regression test is made from.
-- Redact secrets from every command, output, and captured artifact you show,
-  writing `<REDACTED>` in their place, and reference credentials through
-  environment variables so the value stays out of command text. Traces carry auth
-  headers — quote only the
-  lines carrying signal. Say so when redacted evidence is no longer enough to
-  diagnose.
-- For a regression with a known-good version, read `git diff <last-good>..HEAD` of
-  the suspect area before bisecting — the cause is usually visible in the delta and
-  far cheaper than a full bisect; fall through to bisect only when the diff is large
-  or the culprit isn't obvious.
-- Rank three to five falsifiable hypotheses before testing any one of them — each
-  naming what its cause predicts would change — because testing the first
-  plausible idea anchors you to it. Show a reachable user the ranking; they
-  re-rank it instantly from what they shipped last week. Then one hypothesis, one
-  change at a time.
-- Tag every debug probe with a unique prefix (`[DEBUG-a4f2]`) so removing them is
-  one grep — untagged probes survive into main. Use a breakpoint instead of
-  adding log statements when stepping through code. For a performance regression,
-  measure a baseline and bisect rather than logging.
-- Three failed fixes is a circuit breaker: stop patching — the diagnosis or the
-  architecture is wrong. Hand off what you know: hypotheses tested, ruled out,
-  evidence, unknowns.
-- Fix where it's wrong, not where it surfaced.
-- For UI, visual, or generated-artifact bugs, compiling and green unit tests
-  prove nothing — verify the rendered surface or artifact, or name exactly what
-  the user should check.
-- Re-run the exact failing signal, then add the regression that would have caught
-  it; if there's any doubt the regression can fail, revert the fix once and
-  watch it. If no correct seam exists to lock the bug down, that absence is the
-  finding — hand the architecture gap to `architecture`.
-
-Deliver: the failing signal, the root cause (not the symptom), proof of the fix,
-every probe and throwaway harness removed, any follow-up it exposed, and the
-uncommitted candidate handed to `verify` — proving your own fix is not the
-independent review that has to precede a commit. Log the cause and regression in
-`docs/known-issues.md` (committed substrate) only after the fix is proven, creating the minimal
-project-memory structure if the repo lacks it.
+Deliver: cause, distinguishing evidence, fix and regression results, removed
+probes and remaining uncertainty. Hand the uncommitted candidate to independent
+verification. Keep a durable lesson in its existing owner only when it changes
+current guidance; no mandatory debug diary or automatic commit.

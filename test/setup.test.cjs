@@ -33,7 +33,7 @@ const {
 } = require("../setup.cjs");
 
 const WORKFLOW_SKILLS = [
-  "architecture", "commit", "debug", "decision-map", "design", "implement",
+  "architecture", "commit", "debug", "design", "implement",
   "plan", "prototype", "research", "survey", "verify",
 ];
 const MAINTENANCE_SKILLS = ["agents-md", "project-memory", "session-close", "skill-audit", "write-skill"];
@@ -106,6 +106,74 @@ test("individual project installation mirrors the complete skill without running
   }
   assert.equal(fs.existsSync(path.join(project, ".claude", "settings.json")), false);
   assert.deepEqual(filesUnder(home).map((file) => [file, fs.readFileSync(file, "utf8")]), before);
+});
+
+test("standalone design ships its decision reference and rejects the retired install name without mutation", (context) => {
+  const base = tempDir(), project = path.join(base, "project"), home = path.join(base, "home");
+  context.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  fs.mkdirSync(project);
+  const invoke = (name) => spawnSync(process.execPath, [script, "install", name, "--scope", "project"], {
+    cwd: project, env: { ...process.env, HOME: home, PATH: "" }, encoding: "utf8",
+  });
+  const installed = invoke("design");
+  assert.equal(installed.status, 0, installed.stderr);
+  for (const host of [".agents", ".claude"]) {
+    const skillRoot = path.join(project, host, "skills");
+    assert.deepEqual(fs.readdirSync(skillRoot), ["design"]);
+    assert.deepEqual(fs.readFileSync(path.join(skillRoot, "design", "references", "DECISIONS.md")),
+      fs.readFileSync(path.join(root, "skills", "workflow", "design", "references", "DECISIONS.md")));
+  }
+  const before = snapshotTree(project);
+  const retired = invoke("decision-map");
+  assert.notEqual(retired.status, 0);
+  assert.match(retired.stderr, /Unknown Kirin skill/);
+  assert.deepEqual(snapshotTree(project), before);
+});
+
+test("standalone frontend, prototype, Herdr and maintenance installs retain complete local guidance", (context) => {
+  // Installation/payload contract only; no consuming model or browser is run.
+  const base = tempDir();
+  context.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const names = [...SKILL_PACKS.frontend.map((entry) => path.basename(entry.source)), "prototype", "herdr", ...MAINTENANCE_SKILLS];
+  for (const name of names) {
+    const project = path.join(base, name), home = path.join(base, "home");
+    fs.mkdirSync(project);
+    const result = spawnSync(process.execPath, [script, "install", name, "--scope", "project"], {
+      cwd: project, env: { ...process.env, HOME: home, PATH: "" }, encoding: "utf8",
+    });
+    assert.equal(result.status, 0, `${name}: ${result.stderr}`);
+    const group = MAINTENANCE_SKILLS.includes(name) ? "maintenance" : name === "prototype" ? "workflow" : "domain";
+    const source = path.join(root, "skills", group, name);
+    for (const host of [".agents", ".claude"]) {
+      const destination = path.join(project, host, "skills", name);
+      assert.deepEqual(fs.readdirSync(path.dirname(destination)), [name]);
+      const files = filesUnder(source).map((file) => path.relative(source, file)).sort();
+      assert.deepEqual(filesUnder(destination).map((file) => path.relative(destination, file)).sort(), files);
+      for (const file of files) assert.deepEqual(fs.readFileSync(path.join(destination, file)), fs.readFileSync(path.join(source, file)), `${name}/${file}`);
+      const text = fs.readFileSync(path.join(destination, "SKILL.md"), "utf8").replace(/\s+/g, " ");
+      if (name === "frontend-design") {
+        assert.ok(fs.existsSync(path.join(destination, "references", "REVIEW.md")));
+        assert.match(text, /Missing siblings are not an installation requirement/);
+      } else if (name === "prototype") {
+        assert.match(text, /Throwaway status does not waive/);
+        assert.ok(fs.existsSync(path.join(destination, "LOGIC.md")));
+        assert.ok(fs.existsSync(path.join(destination, "UI.md")));
+      } else if (name === "herdr") {
+        assert.match(text, /installed CLI.*authority/);
+        assert.match(text, /artifact.*write authority/);
+        assert.match(text, /Canceling or timing out a wait does not stop/);
+      } else if (group === "domain") {
+        assert.equal(fs.existsSync(path.join(destination, "..", "frontend-design")), false);
+        assert.match(text, /When `frontend-design` is installed/);
+        assert.match(text, /Otherwise report focused/);
+        assert.match(text, /Review-only requests stay read-only/);
+        assert.match(text, /do not install siblings/);
+      }
+    }
+    assert.deepEqual(fs.readdirSync(project).sort(), [".agents", ".claude"]);
+    assert.equal(fs.existsSync(path.join(project, ".claude", "settings.json")), false);
+    assert.equal(fs.existsSync(home), false);
+  }
 });
 
 test("individual global installation changes only the named skill trees", () => {
@@ -940,12 +1008,15 @@ test("global core sync preserves unselected skills and excludes harness-only aud
   write(path.join(roots[1], "design", "SKILL.md"), "stale design\n");
   write(path.join(roots[0], "hand-written", "SKILL.md"), "hand written\n");
   write(path.join(roots[1], "rust", "SKILL.md"), "optional rust\n");
+  for (const dir of roots) write(path.join(dir, "decision-map", "SKILL.md"), "preserve retired deployment\n");
+  const record = path.join(home, "context", "decision-maps", "old", "map.md");
+  write(record, "preserve existing decisions\n");
 
   const first = syncSharedSkills(checkout, home, "replace");
   assert.equal(fs.existsSync(path.join(roots[0], "hand-written", "SKILL.md")), true);
   assert.equal(fs.readFileSync(path.join(roots[1], "rust", "SKILL.md"), "utf8"), "optional rust\n");
   assert.equal(fs.readFileSync(path.join(oldSource, "SKILL.md"), "utf8"), "stale design\n");
-  assert.equal(first.count, 17);
+  assert.equal(first.count, 16);
   for (const dir of roots) {
     assert.equal(fs.lstatSync(path.join(dir, "design")).isDirectory(), true);
     assert.match(fs.readFileSync(path.join(dir, "design", "SKILL.md"), "utf8"), /name: design/);
@@ -956,12 +1027,14 @@ test("global core sync preserves unselected skills and excludes harness-only aud
   write(path.join(checkout, "skills", "workflow", "design", "updated.txt"), "updated\n");
   fs.rmSync(path.join(checkout, "skills", "workflow", "survey"), { recursive: true });
   const second = syncSharedSkills(checkout, home, "replace");
-  assert.equal(second.count, 16);
+  assert.equal(second.count, 15);
   for (const dir of roots) {
     assert.equal(fs.existsSync(path.join(dir, "survey", "SKILL.md")), true);
     assert.equal(fs.readFileSync(path.join(dir, "skill-audit", "SKILL.md"), "utf8"), "previously installed audit\n");
     assert.equal(fs.readFileSync(path.join(dir, "design", "updated.txt"), "utf8"), "updated\n");
+    assert.equal(fs.readFileSync(path.join(dir, "decision-map", "SKILL.md"), "utf8"), "preserve retired deployment\n");
   }
+  assert.equal(fs.readFileSync(record, "utf8"), "preserve existing decisions\n");
 });
 
 test("a missing selected source fails before either destination changes", () => {
@@ -1164,6 +1237,66 @@ test("invalid Claude settings fail before setup mutates home", () => {
   }
 });
 
+test("configuration writes preserve multi-hop links, including dangling targets", () => {
+  for (const missing of [false, true]) {
+    const home = tempDir();
+    try {
+      const target = path.join(home, "managed/settings.json");
+      const hop = path.join(home, "links/settings.json");
+      const file = path.join(home, ".claude/settings.json");
+      fs.mkdirSync(path.dirname(hop), { recursive: true });
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.symlinkSync("../managed/settings.json", hop);
+      fs.symlinkSync("../links/settings.json", file);
+      if (!missing) { write(target, '{"theme":"keep"}\n'); fs.chmodSync(target, 0o640); }
+      setup({ home, pi: null }, root);
+      assert.equal(fs.lstatSync(file).isSymbolicLink(), true);
+      assert.equal(fs.lstatSync(hop).isSymbolicLink(), true);
+      const settings = JSON.parse(fs.readFileSync(target, "utf8"));
+      if (!missing) { assert.equal(settings.theme, "keep"); assert.equal(fs.statSync(target).mode & 0o777, 0o640); }
+      assert.ok(settings.hooks.PreToolUse.length);
+      mergeSubagentConfig(file);
+      assert.equal(fs.lstatSync(hop).isSymbolicLink(), true);
+      assert.equal(JSON.parse(fs.readFileSync(target, "utf8")).artifactDir, "project");
+    } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  }
+});
+
+test("cyclic configuration links fail before any setup changes", () => {
+  for (const relative of [".claude/settings.json", ".claude/CLAUDE.md", ".agents/AGENTS.md"]) {
+    const home = tempDir();
+    try {
+      const file = path.join(home, relative), hop = path.join(home, "hop");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.symlinkSync(hop, file);
+      fs.symlinkSync(file, hop);
+      const before = snapshotTree(home);
+      assert.throws(() => setup({ home, pi: null }, root), /ELOOP|link cycle|symbolic links/);
+      assert.deepEqual(snapshotTree(home), before);
+    } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  }
+});
+
+test("a dangling link/.. cycle cannot be activated and replaced by settings writes", () => {
+  const home = tempDir();
+  try {
+    const file = path.join(home, ".claude/settings.json");
+    fs.mkdirSync(path.dirname(file));
+    fs.symlinkSync("missing/../settings.json", file);
+    const before = snapshotTree(home);
+    assert.throws(() => setup({ home, pi: null }, root), /ENOENT|ELOOP/);
+    assert.deepEqual(snapshotTree(home), before);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test("Claude hooks merely mentioning a managed path retain their custom behavior", () => {
+  const hook = { type: "command", command: 'echo "Inspect $HOME/.claude/kirin/hooks/claude-guard.cjs"', timeout: 99 };
+  const entry = { matcher: "Bash", hooks: [hook] };
+  const merged = mergeClaudeSettings({ hooks: { PreToolUse: [entry] } });
+  assert.deepEqual(merged.hooks.PreToolUse[0], entry);
+  assert.equal(merged.hooks.PreToolUse.length, 2);
+});
+
 test("setup installs durable Claude hooks and preserves settings through a symlink", () => {
   const home = tempDir();
   const managed = path.join(home, "managed", "settings.json");
@@ -1253,7 +1386,7 @@ test("spawned CLI mirrors global core and project selections without a TTY", () 
   assert.equal(global.status, 0, global.stderr);
   for (const directory of [".agents", ".claude"]) {
     const skillRoot = path.join(globalHome, directory, "skills");
-    assert.equal(fs.readdirSync(skillRoot).length, 17);
+    assert.equal(fs.readdirSync(skillRoot).length, 16);
     assert.equal(fs.existsSync(path.join(skillRoot, "rust", "SKILL.md")), false);
     assert.equal(fs.existsSync(path.join(skillRoot, "skill-audit", "SKILL.md")), false);
   }
@@ -1309,7 +1442,7 @@ test("explicit setup installs shared skills and Claude instructions without Pi",
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Pi not found in PATH/);
   assert.equal(fs.existsSync(path.join(home, ".pi")), false);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 16);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
   const claudeAgents = path.join(home, ".claude", "AGENTS.md");
   assert.equal(fs.lstatSync(claudeAgents).isSymbolicLink(), false);
@@ -1335,7 +1468,7 @@ test("explicit setup adds Pi-specific setup only when Pi is in PATH", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Kirin setup complete/);
   assert.equal(fs.readFileSync(path.join(home, "pi-calls"), "utf8").trim().split("\n").length, 3);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 17);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 16);
   assert.equal(fs.readFileSync(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "utf8"), "custom reviewer\n");
   assert.equal(fs.existsSync(path.join(home, ".pi", "agent", "agents", ".kirin-managed-agents.json")), false);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");

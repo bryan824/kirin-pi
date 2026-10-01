@@ -5,16 +5,19 @@ description: "When creating, restyling, or holistically reviewing web UI — set
 
 # Frontend Design
 
+<!-- Modified for kirin-pi. -->
+
 Give the interface a point of view; a collection of familiar components is not a
 visual system. This skill owns aesthetic direction and orchestration, not every
 domain rule.
 
 - Name one aesthetic direction, then express a small visual thesis through type,
   color, rhythm, layout, and only the interactions that reinforce it.
-- Establish foundations before polish. Coordinate `frontend-accessibility`,
-  `frontend-layout`, `frontend-writing`, `frontend-typography`,
-  `frontend-color`, `frontend-motion`, and `frontend-polish` by name; let each
-  own its rules. Add `apple-interface` only for an explicitly Apple direction.
+- Establish foundations before polish. Coordinate available `frontend-accessibility`,
+  `frontend-layout`, `frontend-writing`, `frontend-typography`, `frontend-color`,
+  `frontend-motion`, and `frontend-polish` guidance. Missing siblings are not an
+  installation requirement: assess those disciplines directly and state coverage
+  limits. Apply an Apple-specific direction only when explicitly requested.
 - Preserve existing tokens, components, density, and styling conventions unless
   redesign is explicit. Do not add arbitrary values to evade the system.
 - Reject generic defaults: unconsidered SaaS-blue or purple gradients, centered

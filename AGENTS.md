@@ -1,35 +1,36 @@
 # Repository purpose
 
-This repository is Bryan's reusable coding-agent harness.
+Kirin is Bryan's reusable coding-agent harness for Pi and Claude Code: portable
+skills and focused native integrations, not another workflow runtime.
 
-## Boundaries
+## Ownership
 
-- Root `agents/`, `extensions/`, `hooks/`, and setup/policy files own executable integration.
-- `skills/` owns portable prompt skills.
-- `docs/` owns current durable truth and the sole upstream ledger.
-- `test/` owns repository contracts.
+- `skills/` owns portable prompts; `agents/` owns role presets.
+- `extensions/` and `hooks/` adapt native hosts. `guard-policy.cjs` is the shared
+  command-policy owner; `setup.cjs` owns explicit installation and its startup charter.
+- `docs/` owns current durable truth; `test/` owns repository contracts.
+- Edit these sources, not installed packages or the ignored `.agents/skills/` and
+  `.claude/skills/` copies. Source approval is not installation, upgrade, global
+  configuration, commit or publication authority.
 
-## Rules
+## Essential rules
 
-- Prefer deletion and native Pi features over custom machinery.
-- Do not add project-specific prompts, generated state, or machine-local records.
-- Third-party repository names, URLs, revisions, and provenance belong only in `docs/UPSTREAM_LEDGER.md`; README may link to the ledger generically.
-- Package/runtime identifiers may appear where executable configuration requires them.
-- Keep README and package metadata aligned with current behavior. Do not add a changelog or development-history docs.
-- Run `bun run test` after code changes.
-- Run `bun run pack:dry` after package-surface changes.
+- Prefer deletion, existing owners and native host features over custom machinery.
+- Keep project-specific prompts, generated state and machine-local records out of
+  the committed harness. Keep current truth, not a changelog or development diary.
+- Third-party repository names, URLs, revisions and provenance belong only in
+  [the upstream ledger](docs/UPSTREAM_LEDGER.md); README may link there generically.
+  Package/runtime identifiers may appear where executable configuration requires them.
+- Keep README and package metadata aligned with behavior. Run `bun run test` after
+  code changes and `bun run pack:dry` after package-surface changes.
 
-## Evaluation
+## Read when relevant
 
-Judge the harness, not only the change in front of you, whenever one of these fires:
-
-- Something new wants in — an upstream lesson, a repeated correction, a fresh idea.
-- A `docs/UPSTREAM_LEDGER.md` revisit trigger fires, or a host release ships a native feature a component was built to work around.
-- The same correction recurs across sessions, or a component stops firing.
-
-Two questions settle it:
-
-- **Does each piece still earn its keep?** Judge each layer against `skill-audit`'s criteria, and run its analyzer for evidence before arguing from opinion.
-- **Does the new thing enter, and where?** Try to fold it into an existing principle first, then into a reference, then into an existing component. Adding a new skill, agent, extension, or hook is the last resort, and claims a whole mindset or capability is missing today. Take that step only after a smaller one has been tried and failed.
-
-Record only what changes: current truth in `docs/`, third-party relationships in the ledger, durable lessons folded into the owning skill's principles. A clean local verdict writes nothing. For an explicitly requested upstream review, a fully reviewed source may receive a user-approved checkpoint-only ledger update, preserving original borrowing provenance. Incomplete sources never advance. This narrow exception records current coverage, not an evaluation diary.
+- **Growing, maintaining or updating the harness:** [maintenance map](README.md#maintaining-the-harness)
+  for evaluation triggers, owning guidance and source-versus-install boundaries.
+- **Creating or changing portable prompts:** [skill authoring](skills/maintenance/write-skill/SKILL.md)
+  for preserving useful behavior without adding a framework.
+- **Fixing or verifying behavior:** [verification](docs/verification.md)
+  for checks, affected surfaces and limits of the evidence.
+- **Saving or reorganizing project context:** [memory routing](docs/memory.md)
+  for current docs, working records and preservation rules.

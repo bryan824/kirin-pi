@@ -24,7 +24,10 @@ narrows; decoration cannot repair a broken relationship.
   must not bleed into an adjacent lane or hide a critical action. Layout owns
   the lane; `frontend-typography` owns the text policy within it.
 
-For selected edge cases, read [REFERENCE.md](REFERENCE.md). For a holistic
-frontend review, contribute layout evidence to the
-[shared review contract](../frontend-design/references/REVIEW.md); it owns the
-consolidated review.
+For selected edge cases, read [REFERENCE.md](REFERENCE.md).
+
+When `frontend-design` is installed, use its
+[shared review contract](../frontend-design/references/REVIEW.md). Otherwise report
+focused layout findings, exact evidence, user impact and verification gaps directly.
+Review-only requests stay read-only; do not install siblings or duplicate the full
+review schema.

@@ -1,8 +1,9 @@
+// Modified for kirin-pi; licensing and sync targets: docs/UPSTREAM_LEDGER.md
 // installed by herdr
 // managed by herdr; reinstalling or updating the integration overwrites this file.
 // add custom hooks/plugins beside this file instead of editing it.
 // HERDR_INTEGRATION_ID=pi
-// HERDR_INTEGRATION_VERSION=7
+// HERDR_INTEGRATION_VERSION=8
 // @ts-nocheck
 
 import net from "node:net";
@@ -223,7 +224,8 @@ export default function (pi) {
   });
 
   pi.on("session_start", async (event, ctx) => {
-    if (ctx?.hasUI !== true) {
+    // RPC also reports hasUI; only a TUI owns the visible pane's state.
+    if (ctx?.mode !== "tui") {
       return;
     }
     rootSession = true;

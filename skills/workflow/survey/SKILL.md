@@ -1,45 +1,26 @@
 ---
 name: survey
-description: "When entering an unfamiliar project or subsystem — map what exists, how it runs, where truth lives, and what risks matter, with cited evidence and no edits."
+description: "When entering an unfamiliar project or subsystem — trace current behavior, truth sources, and verification surfaces without editing."
 ---
 
 # Survey
 
-Map the system that exists. You are building orientation, not judging or fixing.
-Keep facts separate from interpretation so later design, debugging, or refactor
-work has solid ground.
+Build the smallest evidence-backed map that makes the next decision possible.
+Describe what exists, not the architecture you wish existed.
 
-Resist: proposing architecture before reading, uncited claims, exhaustive file
-inventories, recording desired-future structure as current state.
+- Follow the relevant entrypoints, callers, state/data flow, configuration and
+  failure paths. Prefer a causal trace to an exhaustive filename inventory.
+- Cite concrete paths, lines, contracts and commands. Distinguish observed facts,
+  inference, stale documentation and unanswered questions. Maps and indexes are
+  leads; confirm important claims in the actual implementation.
+- Identify authoritative contracts and the build/test/reproduction surface.
+  Report conflicts between documentation and behavior without choosing a new
+  product contract or repairing it silently.
+- Stay read-only, including current docs and working records. If a stable map is
+  worth keeping, return a proposed owner and correction or diagram for an
+  authorized writer; do not initialize memory or write an architecture document
+  as a side effect of inspection.
 
-- Read first. No edits.
-- Cite concrete files, functions, commands, tests, docs, and runtime/data flows.
-- Follow the path that matters to the user's question; do not catalog the whole
-  repo unless the repo shape itself is the question.
-- Identify the source of truth: contracts, tests, project memory, generated
-  artifacts, configs, schemas, or external APIs.
-- Note drift as drift: current behavior versus stated contract, not your desired
-  design.
-- Find the verification surface: build, test, lint, run, seed, migrate, or
-  reproduce commands.
-- Prefer the smallest high-leverage map that lets the next decision be made.
-
-A subagent is a good fit here, but it returns evidence, not decisions.
-
-Deliver: current shape, key files and flows, truth sources, verification surface,
-evidence-backed risks or unknowns, and the highest-value next question or next
-move. If the user asks to improve or rethink structure, hand to `architecture`.
-
-When the surveyed map is stable and worth keeping, write
-`docs/architecture.md` (committed substrate) — creating the minimal
-project-memory structure if the repo lacks it — with:
-- A Mermaid diagram of the module/component structure (`graph TD` or
-  `flowchart LR` as fits the shape)
-- A Mermaid sequence or flow diagram for the key runtime/data path(s)
-- A brief prose legend (one sentence per node using domain vocabulary)
-
-Treat existing memory/docs as truth sources to read and report them; durable
-substrate writes go to `docs/` (committed), ephemeral record to the gitignored
-`context/`. Follow the project-memory write policy:
-only write when stable, label uncertainty as `Pending`, and never diagram
-desired-future state as current. Throwaway orientation answers write nothing.
+Deliver: current shape and key flow, cited truth sources, verification options,
+risks/unknowns, and the next useful question or investigation. Structural redesign
+belongs to architecture work, not an orientation answer.

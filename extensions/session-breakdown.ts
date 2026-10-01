@@ -3,7 +3,7 @@
  *
  * Modified for kirin-pi from Apache-2.0-licensed source.
  *
- * Interactive TUI that analyzes ~/.pi/agent/sessions (recursively, *.jsonl) and shows
+ * Interactive TUI that analyzes Pi's native session inventory and shows
  * last 7/30/90 days of:
  * - sessions/day
  * - messages/day
@@ -37,52 +37,6 @@ type CwdKey = string; // normalized cwd path
 type DowKey = string; // "Mon", "Tue", etc.
 type TodKey = string; // "after-midnight", "morning", "afternoon", "evening", "night"
 type BreakdownView = "model" | "cwd" | "dow" | "tod";
-
-function sliceByColumn(line: string, startCol: number, length: number, strict = false): string {
-	if (length <= 0) return "";
-	const endCol = startCol + length;
-	const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-	let result = "";
-	let currentCol = 0;
-	let i = 0;
-	let pendingAnsi = "";
-
-	while (i < line.length) {
-		if (line[i] === "\x1b") {
-			const match = /^\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[PX^_][^\x1b]*(?:\x1b\\)|[@-_])/.exec(line.slice(i));
-			if (match) {
-				if (currentCol >= startCol && currentCol < endCol) {
-					result += match[0];
-				} else if (currentCol < startCol) {
-					pendingAnsi += match[0];
-				}
-				i += match[0].length;
-				continue;
-			}
-		}
-
-		const nextAnsi = line.indexOf("\x1b", i);
-		const textEnd = nextAnsi === -1 ? line.length : nextAnsi;
-		for (const { segment } of segmenter.segment(line.slice(i, textEnd))) {
-			const w = visibleWidth(segment);
-			const inRange = currentCol >= startCol && currentCol < endCol;
-			const fits = !strict || currentCol + w <= endCol;
-			if (inRange && fits) {
-				if (pendingAnsi) {
-					result += pendingAnsi;
-					pendingAnsi = "";
-				}
-				result += segment;
-			}
-			currentCol += w;
-			if (currentCol >= endCol) break;
-		}
-		i = textEnd;
-		if (currentCol >= endCol) break;
-	}
-
-	return result;
-}
 
 const DOW_NAMES: DowKey[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -262,10 +216,6 @@ function weightedMix(colors: Array<{ color: RGB; weight: number }>): RGB {
 	}
 	if (total <= 0) return EMPTY_CELL_BG;
 	return { r: Math.round(r / total), g: Math.round(g / total), b: Math.round(b / total) };
-}
-
-function ansiBg(rgb: RGB, text: string): string {
-	return `\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m${text}\x1b[0m`;
 }
 
 function ansiFg(rgb: RGB, text: string): string {
@@ -529,7 +479,7 @@ async function parseSessionFile(filePath: string, signal?: AbortSignal): Promise
 				continue;
 			}
 
-			if (obj?.type !== "message") continue;
+			if (obj?.type !== "message" && obj?.type !== "usage") continue;
 
 			const { provider, model, modelId, usage } = extractProviderModelAndUsage(obj);
 			const mk =
@@ -539,8 +489,11 @@ async function parseSessionFile(filePath: string, signal?: AbortSignal): Promise
 				"unknown";
 			modelsUsed.add(mk);
 
-			messages += 1;
-			messagesByModel.set(mk, (messagesByModel.get(mk) ?? 0) + 1);
+			// Standalone usage (including unknown kinds) is not a conversation message.
+			if (obj.type === "message") {
+				messages += 1;
+				messagesByModel.set(mk, (messagesByModel.get(mk) ?? 0) + 1);
+			}
 
 			const tok = extractTokensTotal(usage);
 			if (tok > 0) {
@@ -973,51 +926,6 @@ function displayModelName(modelKey: string): string {
 	return idx === -1 ? modelKey : modelKey.slice(idx + 1);
 }
 
-function renderLegendItems(modelColors: Map<ModelKey, RGB>, orderedModels: ModelKey[], otherColor: RGB): string[] {
-	const items: string[] = [];
-	for (const mk of orderedModels) {
-		const c = modelColors.get(mk);
-		if (!c) continue;
-		items.push(`${ansiFg(c, "█")} ${displayModelName(mk)}`);
-	}
-	items.push(`${ansiFg(otherColor, "█")} other`);
-	return items;
-}
-
-function fitRight(text: string, width: number): string {
-	if (width <= 0) return "";
-	let w = visibleWidth(text);
-	let t = text;
-	if (w > width) {
-		t = sliceByColumn(t, w - width, width, true);
-		w = visibleWidth(t);
-	}
-	return " ".repeat(Math.max(0, width - w)) + t;
-}
-
-function renderLegendBlock(leftLabel: string, items: string[], width: number): string[] {
-	if (width <= 0) return [];
-	if (items.length === 0) return [truncateToWidth(leftLabel, width)];
-
-	const lines: string[] = [];
-	// First line: label on left, first item right-aligned into remaining space.
-	const leftW = visibleWidth(leftLabel);
-	if (leftW >= width) {
-		lines.push(truncateToWidth(leftLabel, width));
-		// Put all items on their own lines right-aligned.
-		for (const it of items) lines.push(fitRight(it, width));
-		return lines;
-	}
-
-	const remaining = Math.max(0, width - leftW);
-	lines.push(leftLabel + fitRight(items[0], remaining));
-
-	for (let i = 1; i < items.length; i++) {
-		lines.push(fitRight(items[i], width));
-	}
-	return lines;
-}
-
 function renderModelTable(range: RangeAgg, mode: MeasurementMode, maxRows = 8): string[] {
 	// Keep this relatively narrow: model + selected metric + cost + share.
 	const metric = graphMetricForRange(range, mode);
@@ -1222,22 +1130,6 @@ function renderTodTable(range: RangeAgg, mode: MeasurementMode): string[] {
 	}
 
 	return lines;
-}
-
-function renderLeftRight(left: string, right: string, width: number): string {
-	const leftW = visibleWidth(left);
-	if (width <= 0) return "";
-	if (leftW >= width) return truncateToWidth(left, width);
-
-	const remaining = width - leftW;
-	let rightText = right;
-	const rightW = visibleWidth(rightText);
-	if (rightW > remaining) {
-		// Keep the *rightmost* part visible.
-		rightText = sliceByColumn(rightText, rightW - remaining, remaining, true);
-	}
-	const pad = Math.max(0, remaining - visibleWidth(rightText));
-	return left + " ".repeat(pad) + rightText;
 }
 
 function rangeSummary(range: RangeAgg, days: number, mode: MeasurementMode): string {
@@ -1550,7 +1442,7 @@ class BreakdownComponent implements Component {
 
 export default function sessionBreakdownExtension(pi: ExtensionAPI) {
 	pi.registerCommand("session-breakdown", {
-		description: "Interactive breakdown of last 7/30/90 days of ~/.pi session usage (sessions/messages/tokens + cost by model)",
+		description: "Interactive breakdown of last 7/30/90 days of Pi session usage (sessions/messages/tokens + cost by model)",
 		handler: async (_args, ctx: ExtensionContext) => {
 			if (ctx.mode !== "tui") {
 				// Non-interactive fallback: just notify.

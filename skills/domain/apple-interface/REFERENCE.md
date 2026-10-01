@@ -2,12 +2,12 @@
 
 ## Motion seam
 
-Gesture state, pointer capture, intent thresholds, release velocity, target
-projection, and spring behavior belong to
-[frontend-motion](../frontend-motion/SKILL.md). For this style, bias those shared
-mechanics toward immediate contact feedback, one-to-one manipulation, quiet
-settling, and spatially coherent navigation; do not maintain separate formulas
-or thresholds here.
+Use [frontend-motion](../frontend-motion/SKILL.md) when installed for gesture
+mechanics. Otherwise prefer native interaction; custom manipulation must preserve
+the grab offset, current presentation value, cancellation, scrolling and a usable
+reduced-motion alternative. For an explicitly Apple direction, emphasize immediate
+contact feedback, one-to-one manipulation, quiet settling and coherent navigation.
+No separate formulas or fixed thresholds are required here.
 
 ## Give material a job
 
@@ -34,4 +34,6 @@ text needs room to remain distinct. Honor system and browser text scaling, and
 let surrounding dimensions grow with it rather than protecting a fixed visual
 size. [frontend-typography](../frontend-typography/SKILL.md) owns the type
 system and [frontend-layout](../frontend-layout/SKILL.md) owns the resulting
-space.
+space. These sibling guides are optional: preserve native scaling, semantics and
+readability when they are absent rather than installing dependencies. Report the
+focused result and any unverified interaction directly.

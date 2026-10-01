@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
@@ -33,6 +34,7 @@ test("package uses native Pi resources and a strict publication allowlist", () =
     subagents: { agents: ["./agents"] },
   });
   assert.equal(packageJson.bin["kirin-pi"], "./setup.cjs");
+  assert.equal(packageJson.packageManager, "bun@1.4.2");
   assert.deepEqual(packageJson.files, [
     "agents", "extensions", "hooks", "skills", "docs",
     "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs",
@@ -43,7 +45,33 @@ test("package uses native Pi resources and a strict publication allowlist", () =
   assert.equal(fs.existsSync(path.join(root, "bun.lockb")), false);
 });
 
-test("upstream repository references stay in the ledger except explicit Herdr sync links", () => {
+test("test command runs owned files, not archived namesakes", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kirin-test-scope-"));
+  const write = (file, text) => {
+    const target = path.join(dir, file);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, text);
+  };
+  try {
+    write("package.json", JSON.stringify({ scripts: { test: packageJson.scripts.test } }));
+    write(".gitignore", "/context/\n");
+    for (const [file, name] of [
+      ["test/owned.test.cjs", "owned cjs"],
+      ["test/owned.test.ts", "owned ts"],
+      ["skills/maintenance/skill-audit/scripts/skill-cleaner.test.ts", "owned analyzer"],
+    ]) write(file, `const {test}=require("bun:test"); test(${JSON.stringify(name)},()=>{});\n`);
+    write("context/archive/test/owned.test.cjs", 'throw new Error("ARCHIVED_TEST_MUST_NOT_RUN");\n');
+    const result = spawnSync("bun", ["run", "test"], { cwd: dir, encoding: "utf8", timeout: 15_000 });
+    const output = result.stdout + result.stderr;
+    assert.equal(result.status, 0, output);
+    for (const name of ["owned cjs", "owned ts", "owned analyzer"]) assert.ok(output.includes(`(pass) ${name}`), output);
+    assert.doesNotMatch(output, /ARCHIVED_TEST_MUST_NOT_RUN/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("upstream repository references stay in the ledger", () => {
   const candidates = [
     ...filesUnder(path.join(root, "agents")),
     ...filesUnder(path.join(root, "extensions")),
@@ -55,13 +83,9 @@ test("upstream repository references stay in the ledger except explicit Herdr sy
     path.join(root, "AGENTS.md"),
   ].filter((file) => /\.(?:md|ts|cjs)$/.test(file));
 
-  const allowed = new Set([
-    "https://github.com/herdrdev/herdr/blob/master/src/integration/assets/pi/herdr-agent-state.ts",
-    "https://github.com/herdrdev/herdr/blob/master/skills/herdr/SKILL.md",
-  ]);
   for (const file of candidates) {
     const urls = fs.readFileSync(file, "utf8").match(/https?:\/\/github\.com\/[^\s)`]+/g) ?? [];
-    for (const url of urls) assert.ok(allowed.has(url), `${path.relative(root, file)}: ${url}`);
+    assert.deepEqual(urls, [], path.relative(root, file));
   }
 });
 
@@ -85,7 +109,6 @@ test("README documents Claude native-equivalent boundaries", () => {
   assert.match(readme, /~\/\.claude\/settings\.json/);
   assert.match(readme, /~\/\.claude\/kirin/);
   assert.match(readme, /\/insights/);
-  assert.match(readme, /provider registration is unsupported/i);
   assert.match(readme, /MCP|plugin/);
 });
 
@@ -102,6 +125,34 @@ test("working records, runtime artifacts, and local installed copies stay untrac
   assert.equal(tracked.stdout, "", "working records and installed copies must not enter Git history");
 });
 
+test("root instructions use native AGENTS.md and maintenance navigation resolves", () => {
+  assert.equal(fs.lstatSync(path.join(root, "AGENTS.md")).isFile(), true);
+  assert.equal(fs.lstatSync(path.join(root, "CLAUDE.md"), { throwIfNoEntry: false }), undefined);
+  const instructions = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
+  for (const command of ["test", "pack:dry"]) {
+    assert.ok(packageJson.scripts[command]);
+    assert.ok(instructions.includes(`bun run ${command}`));
+  }
+  for (const target of ["README.md#maintaining-the-harness", "docs/memory.md", "docs/verification.md", "skills/maintenance/write-skill/SKILL.md"]) {
+    assert.ok(instructions.includes(`](${target})`), target);
+  }
+  // These maps use simple Markdown headings. Existence is not model navigation evidence.
+  for (const relative of ["AGENTS.md", "README.md", "docs/memory.md", "docs/verification.md"]) {
+    const file = path.join(root, relative);
+    for (const [, href] of fs.readFileSync(file, "utf8").matchAll(/\]\(([^)]+)\)/g)) {
+      if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
+      const [local, anchor] = href.split("#");
+      const target = local ? path.resolve(path.dirname(file), decodeURI(local)) : file;
+      assert.equal(fs.statSync(target).isFile(), true, `${relative}: ${href}`);
+      if (anchor) {
+        const headings = [...fs.readFileSync(target, "utf8").matchAll(/^#{1,6} (.+)$/gm)]
+          .map(([, title]) => title.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s/g, "-"));
+        assert.ok(headings.includes(anchor), `${relative}: ${href}`);
+      }
+    }
+  }
+});
+
 test("upstream checkpoints are separate from retained provenance", () => {
   const ledger = fs.readFileSync(path.join(root, "docs", "UPSTREAM_LEDGER.md"), "utf8");
   const relationships = ledger.split("## Current relationships\n")[1].split("## Current borrowed surfaces")[0];
@@ -113,9 +164,11 @@ test("upstream checkpoints are separate from retained provenance", () => {
     assert.equal(cells.length, 5, row);
     assert.ok(cells.every(Boolean), row);
   }
-  const instructions = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
-  assert.match(instructions, /user-approved checkpoint-only ledger update/);
-  assert.match(instructions, /Incomplete sources never advance/);
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  const maintenance = readme.split("## Maintaining the harness\n")[1].split("## Development\n")[0];
+  assert.match(maintenance, /user-approved checkpoint-only ledger update/);
+  assert.match(maintenance, /Incomplete sources never advance/);
+  assert.match(maintenance, /Run the audit analyzer first/);
 });
 
 test("required legal and current-truth docs exist", () => {
@@ -129,4 +182,9 @@ test("required legal and current-truth docs exist", () => {
     assert.ok(ledger.includes(notice), notice);
   }
   assert.match(ledger, /herdrdev\/herdr/);
+  assert.match(ledger, /Copyright 2024 Anthropic PBC/);
+  assert.match(ledger, /frontend-design[\s\S]*Apache-2\.0/);
+  for (const file of ["extensions/herdr/agent-state.ts", "extensions/session-breakdown.ts", "skills/domain/frontend-design/SKILL.md", "skills/domain/herdr/SKILL.md"]) {
+    assert.match(fs.readFileSync(path.join(root, file), "utf8"), /Modified for kirin-pi/, file);
+  }
 });

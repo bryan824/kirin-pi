@@ -1,9 +1,7 @@
 /**
  * Herdr integration for kirin-pi.
  *
- * Official sync targets — keep state behavior and user guidance current:
- * https://github.com/herdrdev/herdr/blob/master/src/integration/assets/pi/herdr-agent-state.ts
- * https://github.com/herdrdev/herdr/blob/master/skills/herdr/SKILL.md
+ * Official sync targets and retained provenance: docs/UPSTREAM_LEDGER.md
  *
  * `agent-state.ts` mirrors official Pi state support. This module layers a typed
  * Herdr orchestration tool and Pi-specific ergonomics on top.
@@ -144,7 +142,7 @@ export default function (pi: ExtensionAPI) {
 	setupHerdrAgentState(pi);
 	const herdrEnv = process.env.HERDR_ENV;
 	const currentPaneTargetEnv = process.env.HERDR_PANE_ID;
-	if (!herdrEnv || !currentPaneTargetEnv) {
+	if (herdrEnv !== "1" || !currentPaneTargetEnv) {
 		return;
 	}
 	const currentPaneTarget = currentPaneTargetEnv;
@@ -211,19 +209,17 @@ export default function (pi: ExtensionAPI) {
 		if (index !== -1) aliasOrder.splice(index, 1);
 	}
 
-	function parseHerdrError(output: string): string | null {
+	function parseHerdrError(output: string): Error | null {
 		const trimmed = output.trim();
 		if (!trimmed) return null;
 		try {
 			const value = JSON.parse(trimmed) as HerdrJsonEnvelope;
-			return value.error?.message || value.error?.code || trimmed;
+			return Object.assign(new Error(value.error?.message || value.error?.code || trimmed), {
+				code: value.error?.code,
+			});
 		} catch {
-			return trimmed;
+			return new Error(trimmed);
 		}
-	}
-
-	function isAbortError(error: unknown, signal?: AbortSignal): boolean {
-		return signal?.aborted === true || (error instanceof Error && error.message === "Aborted");
 	}
 
 	async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -242,16 +238,14 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	async function execHerdr(args: string[], signal?: AbortSignal) {
+		throwIfAborted(signal, "herdr");
 		const result = await pi.exec("herdr", args, { signal });
 		if (signal?.aborted || result.killed) {
 			throw new Error("Aborted");
 		}
 		if (result.code !== 0) {
-			const message =
-				parseHerdrError(result.stderr) ||
-				parseHerdrError(result.stdout) ||
-				`herdr ${args.join(" ")} failed with exit code ${result.code}`;
-			throw new Error(message);
+			throw parseHerdrError(result.stderr) || parseHerdrError(result.stdout) ||
+				new Error(`herdr ${args.join(" ")} failed with exit code ${result.code}`);
 		}
 		return result;
 	}
@@ -268,8 +262,13 @@ export default function (pi: ExtensionAPI) {
 		} catch {
 			throw new Error(`Failed to parse JSON from herdr ${args.join(" ")}`);
 		}
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			throw new Error(`Invalid JSON response from herdr ${args.join(" ")}`);
+		}
 		if (value.error) {
-			throw new Error(value.error.message || value.error.code || `herdr ${args.join(" ")} failed`);
+			throw Object.assign(new Error(value.error.message || value.error.code || `herdr ${args.join(" ")} failed`), {
+				code: value.error.code,
+			});
 		}
 		return value as T;
 	}
@@ -280,8 +279,9 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	async function getCurrentPaneInfo(signal?: AbortSignal): Promise<PaneInfo> {
-		const response = await execHerdrJson<{ result: { pane: PaneInfo } }>(["pane", "get", currentPaneTarget], signal);
-		return response.result.pane;
+		const pane = await getPaneInfo(currentPaneTarget, signal);
+		if (!pane) throw new Error(`Caller pane '${currentPaneTarget}' not found.`);
+		return pane;
 	}
 
 	async function getWorkspaceInfo(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceInfo> {
@@ -318,60 +318,31 @@ export default function (pi: ExtensionAPI) {
 	async function getPaneInfo(paneId: string, signal?: AbortSignal): Promise<PaneInfo | null> {
 		try {
 			const response = await execHerdrJson<{ result: { pane: PaneInfo } }>(["pane", "get", paneId], signal);
-			return response.result.pane;
-		} catch (error) {
-			if (isAbortError(error, signal)) throw error;
-			return null;
-		}
-	}
-
-	async function resolveManagedPane(alias: string, workspaceId: string, signal?: AbortSignal): Promise<ManagedPane | null> {
-		const managed = managedPanes.get(alias);
-		if (!managed) return null;
-		if (managed.workspaceId !== workspaceId) return null;
-
-		const pane = await getPaneInfo(managed.paneId, signal);
-		if (!pane) {
-			forgetAlias(alias);
-			return null;
-		}
-
-		return managed;
-	}
-
-	async function resolvePaneRef(
-		ref: string,
-		workspaceId: string,
-		signal?: AbortSignal,
-	): Promise<{ pane: PaneInfo; alias?: string } | null> {
-		const managed = await resolveManagedPane(ref, workspaceId, signal);
-		if (managed) {
-			const pane = await getPaneInfo(managed.paneId, signal);
-			if (!pane) {
-				forgetAlias(ref);
-				return null;
+			const pane = response.result?.pane;
+			if (!pane || (["pane_id", "workspace_id", "tab_id"] as const).some((key) => typeof pane[key] !== "string" || !pane[key])) {
+				throw new Error(`Invalid pane response for '${paneId}'.`);
 			}
-			return { pane, alias: ref };
+			return pane;
+		} catch (error) {
+			if (error instanceof Error && "code" in error && error.code === "pane_not_found") return null;
+			throw error;
 		}
-
-		const pane = await getPaneInfo(ref, signal);
-		if (!pane || pane.workspace_id !== workspaceId) return null;
-		const alias = [...managedPanes.entries()].find(([, managedPane]) => managedPane.paneId === pane.pane_id)?.[0];
-		return { pane, alias };
 	}
 
-	async function requirePaneRef(
-		ref: string,
-		workspaceId: string,
-		signal?: AbortSignal,
-	): Promise<{ pane: PaneInfo; alias?: string }> {
-		const hadAlias = managedPanes.has(ref);
-		const resolved = await resolvePaneRef(ref, workspaceId, signal);
-		if (resolved) return resolved;
-		if (hadAlias) {
-			throw new Error(`Pane alias '${ref}' no longer points to a live pane and was removed.`);
+	async function requirePaneRef(ref: string, signal?: AbortSignal): Promise<{ pane: PaneInfo; alias?: string }> {
+		const managed = managedPanes.get(ref);
+		// Explicit/created targets are global handles, not caller-workspace guesses.
+		const pane = await getPaneInfo(managed?.paneId ?? ref, signal);
+		if (!pane) {
+			if (managed) {
+				forgetAlias(ref);
+				throw new Error(`Pane alias '${ref}' no longer points to a live pane and was removed.`);
+			}
+			throw new Error(`Pane '${ref}' not found.`);
 		}
-		throw new Error(`Pane '${ref}' not found in the current workspace.`);
+		const alias = managed ? ref : [...managedPanes.entries()].find(([, item]) => item.paneId === pane.pane_id)?.[0];
+		if (alias) managedPanes.set(alias, { paneId: pane.pane_id, workspaceId: pane.workspace_id });
+		return { pane, alias };
 	}
 
 	async function readPane(
@@ -495,7 +466,7 @@ export default function (pi: ExtensionAPI) {
 			"Pane actions like run, read, watch, wait_agent, send, and stop must target pane aliases or pane ids, not tab ids. For pane_split, omit pane to split the agent's own pane, or pass a pane alias/id to split that explicit source pane.",
 			"Use `herdr` workspace, tab, and pane_split actions to organize parallel work instead of piling everything into one pane stack.",
 			"Use `herdr` watch for normal command output, including server readiness, test completion, or regex matches.",
-			"Use `herdr` wait_agent only for panes running a recognized coding agent. It waits on agent statuses, not normal process completion; use watch/read for commands like tests or servers.",
+			"Use `herdr` wait_agent only for recognized coding agents; use watch/read for ordinary commands. Immediate idle/done is a current status, not proof that newly submitted work started or finished.",
 			"For agent panes, background finished panes usually become `done` while focused finished panes usually become `idle`.",
 			"Use `recent-unwrapped` when you need log matching or reads that ignore soft wrapping.",
 			"Pane references can be either friendly aliases you created earlier or real herdr pane ids from `list`.",
@@ -684,7 +655,7 @@ export default function (pi: ExtensionAPI) {
 						};
 					}
 					if (params.pane) {
-						const resolved = await requirePaneRef(params.pane, currentWorkspaceId, signal);
+						const resolved = await requirePaneRef(params.pane, signal);
 						const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", resolved.pane.tab_id], signal);
 						return {
 							content: [{
@@ -702,7 +673,7 @@ export default function (pi: ExtensionAPI) {
 					const paneRef = params.pane ?? currentPaneId;
 					const direction = params.direction ?? "right";
 
-					const sourcePane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+					const sourcePane = await requirePaneRef(paneRef, signal);
 					const args = ["pane", "split", sourcePane.pane.pane_id, "--direction", direction];
 					if (params.cwd) args.push("--cwd", params.cwd);
 					if (params.focus !== true) args.push("--no-focus");
@@ -739,7 +710,7 @@ export default function (pi: ExtensionAPI) {
 					if (!paneRef) throw new Error("'pane' is required for run");
 					if (!command) throw new Error("'command' is required for run");
 
-					const targetPane = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+					const targetPane = await requirePaneRef(paneRef, signal);
 					await execHerdr(["pane", "run", targetPane.pane.pane_id, command], signal);
 
 					await sleep(800, signal);
@@ -758,7 +729,7 @@ export default function (pi: ExtensionAPI) {
 						content: [
 							{
 								type: "text",
-								text: `Started '${command}' in pane '${paneLabel}' (${targetPane.pane.pane_id})\n\n${formatReadOutput(initialOutput)}`,
+								text: `Submitted '${command}' to pane '${paneLabel}' (${targetPane.pane.pane_id})\n\n${formatReadOutput(initialOutput)}`,
 							},
 						],
 						details: withSnapshot({
@@ -766,7 +737,7 @@ export default function (pi: ExtensionAPI) {
 							pane: paneLabel,
 							paneId: targetPane.pane.pane_id,
 							command,
-							workspaceId: currentWorkspaceId,
+							workspaceId: targetPane.pane.workspace_id,
 						}),
 					};
 				}
@@ -776,7 +747,7 @@ export default function (pi: ExtensionAPI) {
 					const paneRef = params.pane;
 					if (!paneRef) throw new Error("'pane' is required for read");
 
-					const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+					const resolved = await requirePaneRef(paneRef, signal);
 
 					const output = await readPane(
 						resolved.pane.pane_id,
@@ -806,7 +777,7 @@ export default function (pi: ExtensionAPI) {
 					if (!paneRef) throw new Error("'pane' is required for watch");
 					if (!match) throw new Error("'match' is required for watch");
 
-					const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+					const resolved = await requirePaneRef(paneRef, signal);
 					const paneLabel = resolved.alias || paneRef;
 					const startTime = Date.now();
 
@@ -827,11 +798,10 @@ export default function (pi: ExtensionAPI) {
 					const updateTimer = onUpdate ? setInterval(publishWatchUpdate, 1000) : null;
 
 					try {
-						const args = ["wait", "output", resolved.pane.pane_id, "--match", match];
+						const args = ["pane", "wait-output", resolved.pane.pane_id, params.regex ? "--regex" : "--match", match];
 						if (params.source) args.push("--source", params.source);
 						if (params.lines != null) args.push("--lines", String(params.lines));
 						if (params.timeout != null) args.push("--timeout", String(params.timeout));
-						if (params.regex) args.push("--regex");
 						if (params.raw) args.push("--raw");
 
 						const response = await execHerdrJson<{
@@ -873,7 +843,7 @@ export default function (pi: ExtensionAPI) {
 					const resolvedPanes: Array<{ pane: PaneInfo; aliasOrRef: string }> = [];
 					for (const paneRef of paneRefs) {
 						throwIfAborted(signal, "wait_agent");
-						const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+						const resolved = await requirePaneRef(paneRef, signal);
 						resolvedPanes.push({
 							pane: resolved.pane,
 							aliasOrRef: resolved.alias || paneRef,
@@ -895,6 +865,9 @@ export default function (pi: ExtensionAPI) {
 							throwIfAborted(signal, "wait_agent");
 							const pane = await getPaneInfo(resolved.pane.pane_id, signal);
 							if (!pane) throw new Error(`Pane '${resolved.aliasOrRef}' no longer exists.`);
+							if (typeof pane.agent !== "string" || !pane.agent.trim()) {
+								throw new Error(`Pane '${resolved.aliasOrRef}' has no recognized coding agent; use watch/read for ordinary commands.`);
+							}
 							snapshot.push({
 								pane: resolved.aliasOrRef,
 								paneId: pane.pane_id,
@@ -942,7 +915,7 @@ export default function (pi: ExtensionAPI) {
 					if (!paneRef) throw new Error("'pane' is required for send");
 					if (!params.text && !params.keys) throw new Error("'text' or 'keys' is required for send");
 
-					const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+					const resolved = await requirePaneRef(paneRef, signal);
 
 					if (params.text) {
 						await execHerdr(["pane", "send-text", resolved.pane.pane_id, params.text], signal);
@@ -970,7 +943,7 @@ export default function (pi: ExtensionAPI) {
 					const paneRef = params.pane;
 					if (!paneRef) throw new Error("'pane' is required for stop");
 
-					const resolved = await requirePaneRef(paneRef, currentWorkspaceId, signal);
+					const resolved = await requirePaneRef(paneRef, signal);
 					if (resolved.pane.pane_id === currentPaneId) {
 						throw new Error("Refusing to close the pane pi is running in.");
 					}

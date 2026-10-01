@@ -1,75 +1,43 @@
-# Test-Driven Development
+# Tests That Can Disagree
 
-The development discipline `implement` defaults to for any behavior change — the good
-parts of test-first practice without the iron-law ceremony. kirin trusts a capable
-model, so there is no "delete every line of untested code" ritual and no
-rationalization table; the value is the *order* and the *test quality*, not enforcement.
+A test is evidence about a contract, not a ceremonial prerequisite. Test-first
+work is especially useful for a regression: reproduce the symptom, observe the
+right failure, make a narrow fix, then rerun the original scenario and nearby
+paths. A passing characterization or newly added boundary test can still be
+useful; do not delete correct code just to manufacture a red step.
 
-## The loop: red → green → refactor, one slice at a time
+## Independent expectations
 
-- **Red.** One failing test for one behavior. Watch it fail, and fail for the *right
-  reason* — the behavior is missing, not a typo or a setup error. A test you never saw
-  fail proves nothing; a test that passes the moment you write it is testing something
-  you already had.
-- **Green.** The minimal code that passes — no speculative options or features the test
-  doesn't demand (YAGNI).
-- **Refactor** — only while green, never while red. Remove duplication, deepen modules,
-  improve names; keep every test green.
+Use known-good literals, worked examples, invariants, or an independent oracle.
+Do not compute an expected result by repeating the production algorithm. A test
+that cannot disagree with the code offers no independent evidence.
 
-**Vertical, not horizontal.** One test → its implementation → the next test. Do *not*
-write all the tests first and then all the code: bulk tests describe imagined behavior
-and the shape of things, pass when behavior breaks, and commit you to a structure you
-didn't understand yet. Each test responds to what the last cycle taught you — tracer
-bullets, not a wall of specs.
+Test observable behavior across a useful seam. Caller-facing tests survive
+refactors better than assertions about helper-call order. Internal seams can
+provide precise evidence for difficult branches, but retain coverage of the real
+entrypoint so correct internals cannot hide broken integration.
 
-## Bug fixes: prove it first
+## Small feedback loops
 
-Reproduce the bug with a failing test *before* touching the fix. It fails → the bug is
-confirmed and you know the test bites; apply the fix → it passes → that same test is now
-the regression guard. Never fix a bug without it. (`debug` owns finding the cause; this
-owns locking it down.)
+Prefer a small behavior slice and fast feedback, then broaden coverage as the
+flow becomes clear. A table can cover related boundary cases without a test per
+input. Keep names and setup understandable without following a fixture framework.
+Use the repository's existing test tools rather than importing another stack.
 
-## What makes a test good
+Use real components where practical. Substitute time, remote services, processes
+or filesystem boundaries when deterministic or safe execution requires it. A fake
+must preserve the boundary contract, and the report must distinguish it from the
+real environment. Over-mocking the code being evaluated produces hollow greens.
 
-- **Test behavior through the public interface**, not implementation. Assert the
-  outcome a caller observes, not which internal methods ran or in what order. Verify
-  *through* the interface, not around it (retrieve via the API; don't query the database
-  directly to check a write).
-- **The refactor test:** if a behavior-preserving refactor breaks the test, the test
-  was coupled to implementation — rewrite it against behavior. Code changes; tests of
-  behavior shouldn't.
-- **One behavior per test**, named for that behavior so the suite reads like a
-  specification ("completing a task records the timestamp", not "test3"). An "and" in
-  the name means split it.
-- **Expected values come from an independent source of truth** — a known-good literal,
-  a worked example, the spec. A tautological test recomputes the expectation the way
-  the code does (`expect(add(a, b)).toBe(a + b)`) and passes by construction; a test
-  that cannot disagree with the code proves nothing.
-- **DAMP over DRY.** A test should be readable on its own; duplicated setup across tests
-  is fine when it lets each test tell its whole story. Over-extracting shared helpers
-  hides what each test actually checks.
+## Strength of evidence
 
-## Test doubles: real > fake > stub > mock
+If unsure a regression test detects the bug, run it against the old behavior or
+make a controlled mutation in an isolated fixture. Do not revert user changes to
+demonstrate a failure. Failed setup, swallowed output and skipped assertions are
+not successful reproductions.
 
-Use the simplest double that works, preferring real code — the more real, the more a
-test can catch. Mock *only at system boundaries* you don't control: external APIs, time,
-randomness, sometimes the filesystem or DB (prefer a test DB or in-memory fake). Never
-mock your own collaborators — over-mocking yields green tests over broken production.
-Inject boundary dependencies rather than constructing them inside, and prefer specific
-per-operation interfaces (each independently fakeable) over one generic fetcher that
-needs conditional logic in the mock.
-
-## Let the tests shape the design
-
-Hard to test is a design signal, not a testing problem. If you must mock everything the
-code is too coupled; if setup is huge the interface is too wide. Fix the design — inject
-dependencies, improve the module behind a smaller interface — rather than contorting the
-test. "Hard to test" usually means "hard to use." (Hand structural findings to `architecture`.)
-
-## Scope
-
-You can't test everything, and trying to is its own waste. Prioritize critical paths and
-complex logic; when it's unclear, confirm with the user which behaviors matter most —
-and at which seams (public boundaries) the tests will live, before writing them. Keep
-most tests small and fast (no I/O, milliseconds); reserve slow end-to-end tests for
-genuinely critical user flows.
+Choose checks for consequence: invalid input, failure/cancellation, data and
+permission boundaries, and critical user paths. Static compilation does not prove
+a rendered interface works; unit tests do not prove a host or model follows a
+prompt. Required unavailable evidence remains outstanding. Refactor without
+changing the contract and rerun affected checks before independent review.

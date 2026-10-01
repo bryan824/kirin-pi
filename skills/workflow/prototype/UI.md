@@ -1,62 +1,46 @@
 # UI Prototype
 
-Use this branch for one **visual question about one component or surface**. If the
-question is about state or business rules, use [LOGIC.md](LOGIC.md) instead.
+Use for a visual or interaction question whose alternatives must be experienced.
+A rule/state question may be cheaper to answer through [LOGIC.md](LOGIC.md).
+The experiment is evidence, not permission to alter a production flow.
 
-A UI prototype is disposable evidence, not a production shortcut. Do not edit a
-production route during exploration: preserve the logic/UI boundary and keep all
-mutations stubbed.
+## Compare the consequential difference
 
-## Build the comparison
+State the question and name meaningful directions before coding. Vary the actual
+decision—hierarchy, density, interaction or structure—not just paint. Use only as
+many variants as the question needs; a single demonstration can settle some
+uncertainties. The recipient and task determine the preview format.
 
-1. State the visual question and list the directions before coding. Make **three**
-   variants by default; use no more than five. Each gets a descriptive name and a
-   distinct decision axis (for example, density, hierarchy, interaction model, or
-   personality). Colour or copy changes alone are not directions.
-2. Recon the host's tokens, component conventions, and surrounding context. Every
-   direction should use realistic product-shaped content and the project's tokens.
-   An isolated harness may render real read-only components and data; it must not
-   make real mutations.
-3. Use the host's existing isolated preview seam—a route, story, playground,
-   preview target, dev-only screen, or equivalent—without modifying a production
-   flow. If none exists and the artifact is browser-compatible, create one
-   standalone HTML file; otherwise create the smallest native preview target. Add
-   no dependencies or production runtime wiring. Keep one command to run it.
-4. Default to one full-size variant at a time in realistic context; never shrink
-   the work into thumbnails. Use side-by-side comparison only when every variant
-   remains at its real operating size and direct spatial comparison is the
-   question. Provide accessible controls appropriate to the host, including
-   keyboard and pointer input where supported. Persist the selected named direction
-   through the host's reproducible state (`?variant=` on the web). Switch instantly;
-   offer replay only when an animation or interaction makes it useful.
+Use existing tokens, components and a realistic host page/context. Stress product-
+shaped content, localization and narrow layouts instead of empty placeholders.
+Use an isolated story, playground, preview route or native target when available;
+an offline HTML artifact can serve a shareable web question. No new dependency or
+production wiring merely for the comparison. Stub mutations and use only approved
+read-only data. Experimental persistence needs its own isolated, authorized scope.
 
-Keep the selector visibly separate from the work being judged. On every switch,
-surface the current named direction and enough relevant context to judge it.
+Default to one full-size named variant at a time. Side-by-side views help only
+when each stays at its real operating size. Keep the selector visibly separate
+from the subject, accessible by keyboard and pointer, with a clear current choice.
+Expose reproducible selection (`?variant=` on the web, or an equivalent native
+state), reset and useful scenarios. Replay motion when it is part of the question.
 
-## Verify and decide
+## Test the interaction, not a screenshot alone
 
-Run the harness and visit every direction. Confirm its intended interactions work
-and the host diagnostics are clean (including the browser console on web). Then
-present the preview target or file, its run command and controls, plus an honest
-comparison:
+Check the preview and every claimed direction through its real controls. Preserve
+focus and semantic behavior, content reflow, reduced motion and reachable recovery
+states. Motion must remain continuous through interruption and reversal; prefer
+native gestures when they fit, and do not hijack scrolling or browser navigation.
+Measure suspected rendering cost rather than promising performance from a CSS
+property or animation library.
 
-| Direction | Decision axis | When it wins | Cost |
-| --- | --- | --- | --- |
-| Descriptive name | What it changes | Where it is the better choice | What it gives up |
+Report exact interactions/diagnostics and what was observed. A screenshot can show
+appearance, not keyboard behavior or frame timing; a build cannot verify the
+surface. Label missing runtime or device checks **Not verified** rather than
+inferring success from a fixture.
 
-The user chooses; do not infer a winner. Record the question, observed evidence,
-and human decision in the repository's prototype/decision record convention (or
-`context/prototypes/<date>-<slug>.md` when none exists) before the decision map
-advances.
-
-After selection, promote **only** the chosen direction using production standards
-and the host's conventions. Delete the harness and losing directions; do not leave
-prototype code behind. If no direction is selected, keep the work throwaway and do
-not promote it.
-
-## Avoid
-
-- Multiple questions or components in one run.
-- Variants that share the same structural answer.
-- Empty, invented context when read-only project context is available.
-- Persistent prototype UI, real mutations, or a production-route experiment.
+Present artifact/run instructions, named directions, their trade-offs and evidence.
+The human chooses; do not infer a winner or promote an unselected design. Record
+the decision in the existing effort record when continuity needs it. Implementation
+of a selected direction still uses production standards and approved scope.
+Cleanup is limited to authorized throwaway work; no automatic publishing, route
+replacement, record deletion or removal of user changes.

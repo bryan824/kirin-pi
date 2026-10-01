@@ -5,17 +5,24 @@ description: "When a repository needs durable agent-readable context — initial
 
 # Project Memory
 
-Keep current truth in Git and working records out of it.
-
-Read `PROJECT_MEMORY.md`, then run the co-located helper:
+Keep current truth in Git and working records out of it. Read [PROJECT_MEMORY.md](PROJECT_MEMORY.md).
+Resolve `SKILL_DIR` to the directory containing this loaded skill before invoking
+its helper, rather than assuming a checkout layout:
 
 ```bash
-bun skills/maintenance/project-memory/scripts/project-memory.cjs check --root <repo>
-bun skills/maintenance/project-memory/scripts/project-memory.cjs init --root <repo>
+bun "$SKILL_DIR/scripts/project-memory.cjs" check --root <repo>
+# Only when initialization is authorized:
+bun "$SKILL_DIR/scripts/project-memory.cjs" init --root <repo>
 ```
 
-The helper creates only `docs/memory.md`, `docs/verification.md`, and the root gitignore entry for `context/`. Skills create record or substrate paths lazily when they have real content.
+Check is read-only. Init creates only required current docs and an effective
+root ignore for `context/`; tracked records remain tracked and must be reported,
+not automatically removed from the index. A non-Git directory cannot be certified
+ignored. Inspect existing path ownership and conventions before initializing.
 
-Do not migrate, concatenate, or rewrite existing docs automatically. Report legacy or unknown memory roots for a human decision. Preserve current documentation and repository conventions.
+Do not migrate, concatenate or rewrite existing docs automatically. Report
+unknown/legacy roots or ambiguous symlinks for a human decision. Other paths are
+created lazily when authorized work has real content for them.
 
-Deliver: state (`absent`, `detected`, or `adopted`), created paths, detected roots, and any decision the user must make.
+Deliver: observed adoption state, created paths, privacy/ignore evidence, and
+remaining decisions. A marker alone is not proof of a complete or private substrate.

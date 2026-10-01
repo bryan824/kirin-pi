@@ -1,0 +1,14 @@
+amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
+
+hooks {
+  ["pre-commit"] {
+    fix = false
+    stage = false
+    stash = "none"
+    steps {
+      ["kirin-integrity"] {
+        check = new Command { argv = List("bun", "run", "test") }
+      }
+    }
+  }
+}

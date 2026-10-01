@@ -56,36 +56,60 @@ function splitShellSegments(command) {
 }
 
 function shellTokens(segment) {
-  return segment.match(/"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g)?.map((token) => {
-    if ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('"') && token.endsWith('"'))) {
-      return token.slice(1, -1);
+  const tokens = [];
+  let token = "", quote = null, started = false;
+  for (let i = 0; i < segment.length; i += 1) {
+    const char = segment[i];
+    if (char === "\\" && quote !== "'" && i + 1 < segment.length) {
+      const next = segment[i + 1];
+      if (!quote || '"\\$`\n'.includes(next)) {
+        if (next !== "\n") { token += next; started = true; }
+        i += 1;
+        continue;
+      }
     }
-    return token;
-  }) ?? [];
+    if (quote) {
+      if (char === quote) quote = null;
+      else token += char;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      started = true;
+    } else if (/\s/.test(char)) {
+      if (started) tokens.push(token);
+      token = "";
+      started = false;
+    } else {
+      token += char;
+      started = true;
+    }
+  }
+  if (started) tokens.push(token);
+  return tokens;
 }
 
 function basename(command) {
   return command.split(/[\\/]/).pop() ?? command;
 }
 
-function commandToken(tokens) {
+function commandIndex(tokens, assignments) {
   let index = 0;
-
-  while (tokens[index] === "command" || tokens[index] === "exec") index += 1;
-  while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[index] ?? "")) index += 1;
-
-  const first = tokens[index];
-  if (first && basename(first) === "env") {
-    index += 1;
-    while ((tokens[index] ?? "").startsWith("-")) {
-      // Good enough for our policy: env options may take operands, but skipping
-      // the option token still leaves PATH shims as a fallback for exotic forms.
+  while (index < tokens.length) {
+    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[index] ?? "")) {
+      assignments?.push(tokens[index]);
       index += 1;
     }
-    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[index] ?? "")) index += 1;
+    const wrapper = basename(tokens[index] ?? "");
+    if (!["command", "exec", "env"].includes(wrapper)) return index;
+    index += 1;
+    while ((tokens[index] ?? "").startsWith("-")) {
+      const option = tokens[index++];
+      if (option === "--") break;
+      if (wrapper === "command" && /^-[^-]*[vV]/.test(option)) return undefined;
+      if ((wrapper === "exec" && option === "-a") ||
+          (wrapper === "env" && ["-u", "--unset", "-C", "--chdir"].includes(option))) index += 1;
+    }
   }
-
-  return tokens[index];
+  return undefined;
 }
 
 function isPythonCommand(command) {
@@ -174,10 +198,10 @@ function getBlockedPythonToolMessage(command) {
     const tokens = shellTokens(segment);
     if (!tokens.length) continue;
 
-    const cmd = commandToken(tokens);
+    const cmdIndex = commandIndex(tokens);
+    const cmd = tokens[cmdIndex];
     if (!cmd) continue;
     const cmdName = basename(cmd);
-    const cmdIndex = tokens.indexOf(cmd);
 
     if (isPipCommand(cmd)) {
       return disabledPipMessage(cmdName);
@@ -199,14 +223,65 @@ function getBlockedPythonToolMessage(command) {
   return null;
 }
 
+// ponytail: ordinary shell/Git argv only; substitutions, aliases and shell
+// programs need host authorization, not a pretend sandbox or a full shell parser.
 function getBlockedGitMessage(command) {
   if (typeof command !== "string") return null;
   for (const segment of splitShellSegments(command)) {
-    if (/^git\s+(add|stage)\b/.test(segment) && /(?:^|\s)(?:-A|--all|\.)(?:\s|$)/.test(segment)) {
-      return "Blocked: stage exact paths — `git add -A`/`.`/`--all` is off-limits. Run `git add <path> …` per logical commit.";
+    const tokens = shellTokens(segment);
+    const assignments = [];
+    const cmdIndex = commandIndex(tokens, assignments);
+    const cmd = tokens[cmdIndex];
+    if (!cmd || basename(cmd) !== "git") continue;
+    let i = cmdIndex + 1;
+    let hooksOverride = assignments.some((value) => value === "HK=0" || /^HK_SKIP_STEPS=.+/.test(value));
+    while (tokens[i]?.startsWith("-")) {
+      const option = tokens[i++];
+      if (option === "--") break;
+      if (option === "-c" || option === "--config-env") {
+        hooksOverride ||= /^(?:core\.hooksPath|hook\..+\.(?:command|event|enabled))=/i.test(tokens[i] ?? "");
+        i += 1;
+      } else if (option.startsWith("-c") || option.startsWith("--config-env=")) {
+        hooksOverride ||= /^(?:core\.hooksPath|hook\..+\.(?:command|event|enabled))=/i.test(option.replace(/^(?:-c|--config-env=)/, ""));
+      } else if (["-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix"].includes(option)) {
+        i += 1;
+      }
     }
-    if (/^git\s+commit\b/.test(segment) && /(?:^|\s)(?:--no-verify|-n)(?:\s|$)/.test(segment)) {
-      return "Blocked: `git commit --no-verify` skips integrity hooks. Commit without it.";
+    const subcommand = tokens[i++];
+    if (subcommand !== "commit" && subcommand !== "add" && subcommand !== "stage") continue;
+    let paths = 0, update = false, all = false, bypass = hooksOverride, options = true;
+    for (; i < tokens.length; i += 1) {
+      const token = tokens[i];
+      if (options && token === "--") { options = false; continue; }
+      if (options && token.startsWith("-")) {
+        if (subcommand === "commit") {
+          if (token === "--no-verify") bypass = true;
+          if (["--message", "--file", "--reuse-message", "--reedit-message", "--template", "--author", "--date", "--cleanup", "--trailer", "--fixup", "--squash", "--pathspec-from-file"].includes(token)) i += 1;
+          if (!token.startsWith("--")) {
+            for (let j = 1; j < token.length; j += 1) {
+              if (token[j] === "n") bypass = true;
+              if ("mFCct".includes(token[j])) {
+                if (j === token.length - 1) i += 1;
+                break;
+              }
+              if (token[j] === "S") break; // Attached signing-key operand.
+            }
+          }
+        } else {
+          all ||= token === "--all" || /^-[^-]*A/.test(token);
+          update ||= token === "--update" || /^-[^-]*u/.test(token);
+          if (["--chmod", "--pathspec-from-file"].includes(token)) i += 1;
+        }
+        continue;
+      }
+      paths += 1;
+      if (subcommand !== "commit" && [".", "./", ":/"].includes(token)) all = true;
+    }
+    if (subcommand === "commit" && bypass) {
+      return "Blocked: do not bypass integrity hooks with commit flags, environment skips or per-command hook overrides.";
+    }
+    if (subcommand !== "commit" && (all || (update && paths === 0))) {
+      return "Blocked: stage exact paths, not broad all/update/root pathspecs. Run `git add <path> …` per logical commit.";
     }
   }
   return null;

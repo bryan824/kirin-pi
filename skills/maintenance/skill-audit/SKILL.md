@@ -11,34 +11,42 @@ structural judgment across the harness.
 For an explicit upstream review or absorption request, load [Upstream review](references/UPSTREAM_REVIEW.md).
 Ordinary audits stay local: do not fetch upstreams or advance their checkpoints.
 
-Run the co-located analyzer:
+Resolve `SKILL_DIR` to the directory containing this loaded `SKILL.md`, not a
+checkout-relative path. For an isolated inventory, run:
 
 ```bash
-bun skills/maintenance/skill-audit/scripts/skill-cleaner.ts --months 3
-# --no-logs
-# --scan-projects
-# --budget-root PATH
-# --root PATH --root-only
-# --context-tokens N --budget-percent P
-# --all
-# --json
+bun "$SKILL_DIR/scripts/skill-cleaner.ts" --root PATH --root-only --no-logs
 ```
 
-Read the report in this order: prompt budget, user-invoked skills, description candidates, source/deploy drift, unused candidates, roots.
+Use `--help` for options. Log scans require appropriate private-data scope;
+`--log-root PATH` replaces the default Pi/Claude history roots. Do not expand
+roots or collect history merely to fill evidence gaps. Default inventory omits
+project `.claude/skills` and package resources; include them only through approved
+explicit roots. Use an actual host-exported inventory when available; filesystem
+presence, frontmatter eligibility, and the comparison base are not effective
+selection or ownership.
+
+Read coverage and skipped/error/byte counts before interpreting results. Commands,
+body envelopes, successful Skill results, body reads and reference reads are
+separate signals. Missing signals, partial logs, unsupported tools, and inherited
+context are unknown—not proof of disuse. Listing/body token estimates are
+conditional character-ratio estimates, not native prompts, actual retention,
+model compliance, or savings. Reference payload and inherited-context costs remain
+unmeasured; hypothetical context budgets require an explicit window.
 
 Then inspect what the analyzer cannot prove:
 
 - instruction drift across `AGENTS.md`/`CLAUDE.md`
 - package, hook, extension, permission, and agent-preset conflicts
-- stale project memory naming files or commands that no longer exist
+- stale project memory, weak navigation pointers or competing owners of one fact
 - native package resources versus optional flattened cross-agent copies
 
 Each layer earns its keep differently, so judge each on its own test — and against
 the host's current native features, since a component built to work around a gap
 becomes waste when the host release closes it:
 
-- **Skill** — fires on the turns it claims, and carries what the model would not
-  do unguided. One that never fires is dead weight whatever its quality.
+- **Skill** — provides a useful stance on its intended turns. Distinguish a weak
+  trigger from missing discovery, selection, or observation before retiring it.
 - **Agent preset** — holds a role the fleet cannot already cover, and returns
   evidence the parent could not have gathered inline.
 - **Extension / hook** — owns tooling around state (commands, UI, gates,
@@ -47,6 +55,16 @@ becomes waste when the host release closes it:
 - **Doc** — states truth the environment cannot be asked for. Anything a script,
   config, or `--help` already answers is a cache that will go stale.
 
-Current config and command output outrank memory. Deployed copies are outputs, never editing targets. Suggest changes before deleting untracked user skills.
+For a repeated mechanical mistake, inspect existing tests, lint, scripts and CI:
+a missing, unwired or broken check may be the defect. Prefer a focused deterministic
+check over another prose rule when it can catch the failure. Keep judgment and
+non-obvious authority boundaries in guidance; do not install hooks or add a new
+enforcement layer merely because one is absent.
 
-Deliver: evidence, ranked cleanup candidates, prompt-budget impact, and exact source paths to change.
+Current config and command output outrank memory. Fix an owned source rather than
+an unexplained deployed copy. Similarity is a comparison lead, not identity,
+provenance, or permission to overwrite. Preserve user files and require authority
+for deletion; a clean local verdict writes nothing.
+
+Deliver: evidence and its limits, ranked simplifications, conditional payload
+impact, exact owning paths, and any required validation still unrun.

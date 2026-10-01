@@ -1,32 +1,26 @@
-# <Plan title>
+# <Outcome>
 
-Status: DRAFT
+Authority and scope: <approved intent, or choices awaiting approval>
 
-## Goal
+## Requirements and exclusions
 
-## Non-goals
+## Contracts, decisions and evidence
 
-## Decision sources
+## Acceptance and verification
 
-- Decision or evidence → plan section
-
-## Contracts and invariants
-
-## Acceptance scenarios
-
-## Testing seams
+Trace user requirements to evidence, approved deferrals, or blockers.
 
 ## Risks and rollback
 
-## Work units
+## Execution units
 
-### <ID> — <outcome>
+### <Key when useful> — <verifiable outcome>
 
-- **Blockers:** none | <IDs>
-- **Owns:** <files or boundaries>
-- **Change:** <small vertical outcome>
-- **Verification:** <command or observable proof>
+- Prerequisites / open decisions:
+- Owned files or boundaries / integration owner:
+- Change:
+- Verification:
+- Recovery / rollback:
 
-## Ready frontier
-
-- <IDs whose blockers are satisfied>
+Keep only sections that help execution. Reuse a suitable effort record; runtime
+claims and live status belong to the active runtime, not a second task store.

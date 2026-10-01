@@ -1,29 +1,31 @@
 ---
 name: prototype
-description: "When one design question needs runnable evidence — build throwaway logic or UI, capture the verdict, then delete or absorb the code."
+description: "When a design question needs runnable evidence — choose a useful experimental surface, protect real data, and let observed behavior inform the decision."
 ---
 
 # Prototype
 
-A prototype is throwaway code that answers a question, and the question decides
-the shape. Picking the wrong type wastes the whole prototype.
+Build the cheapest experiment that can answer the question for its recipient,
+not a compulsory TUI, web page or production scaffold.
 
-Resist: production polish, persistence, abstractions, and leaving the prototype to
-rot in the repo once it has answered its question.
+- State the question, useful observations and allowed scope before coding. A
+  logic/state question usually needs [LOGIC.md](LOGIC.md); a visual/interaction
+  comparison needs [UI.md](UI.md). Choose a script, terminal, offline artifact or
+  native preview according to the question and recipient. Ask when that choice
+  is consequential, rather than guessing from backend/frontend file location.
+- Use existing language, tools and preview seams. Keep experimental code clearly
+  disposable and isolated from production routing and mutations. Start with
+  in-memory or approved fixture data; persistence experiments need an explicitly
+  isolated data boundary and recovery path.
+- Keep relevant state visible, scenarios resettable and results reproducible.
+  Leave a small decision check for nontrivial logic. Throwaway status does not
+  waive input validation, failure handling, accessibility or data protection.
+- Present observed evidence separately from assumptions and unrun checks. A human
+  preference remains the human's decision; if the recipient has not tried the
+  artifact, do not invent their verdict.
 
-- Pick the branch from the question (ask if the user is reachable and it's ambiguous):
-  "does this logic/state feel right?" → [LOGIC.md](LOGIC.md), a tiny interactive terminal
-  app; "what should this look like?" → [UI.md](UI.md), a disposable visual comparison.
-  Default by surrounding code (backend → logic, page → UI) and state the assumption.
-- Throwaway from day one and named as such, located next to where it'll be used; obey the
-  project's existing routing and task-runner conventions. One command to run.
-- No persistence by default; skip tests, error handling, and abstractions; surface the full
-  relevant state after every action (logic) or variant switch (UI).
-- For a decision-map question, name its decision ID and keep the human in the
-  loop. The prototype record is evidence; the decision and consequences belong
-  in the decision resolution before the map advances.
-
-Deliver: question, verdict, evidence, and resulting decision under the repo's
-record convention or `context/prototypes/<date>-<slug>.md`, then delete or absorb
-the throwaway code. Promote only current stable truth to code, tests, or docs;
-do not archive prototypes on throwaway branches by default.
+Deliver: question, artifact/run instructions, scenarios, evidence and decision or
+remaining uncertainty in the existing effort record. Absorb only validated logic
+or the selected direction under production standards and authorization. Remove
+owned throwaway work only within cleanup authority; preserve user edits and
+records. No automatic publication, deployment or new decision diary.

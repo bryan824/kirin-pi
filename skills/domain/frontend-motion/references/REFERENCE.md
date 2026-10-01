@@ -33,8 +33,10 @@ observed problem and remove it when the motion no longer needs it.
 
 ## Direct manipulation
 
-On pointer down, record the active pointer and the grab offset, then capture the
-pointer so movement continues outside the element. Move from the live pointer
+Prefer native interaction when it provides the needed behavior. A custom gesture
+must coexist with scrolling, navigation, keyboard input and cancellation rather
+than claiming every pointer event. On pointer down, record the active pointer and
+the grab offset, then capture the pointer so movement continues outside the element. Move from the live pointer
 position without jumping to the element's center. Apply hysteresis before
 claiming a direction or committing a drag, and release capture on completion or
 cancellation.
@@ -53,8 +55,10 @@ accessibility requirement with `frontend-accessibility`.
 
 Review purpose, frequency, continuity, origin, exact transitioned properties,
 interruptibility, gesture handoff, reduced-motion behavior, and frame cost.
-Contribute evidence and findings through the
-[shared review contract](../../frontend-design/references/REVIEW.md).
+When `frontend-design` is installed, use its
+[shared review contract](../../frontend-design/references/REVIEW.md). Otherwise
+report focused findings, observed evidence and verification gaps directly; do not
+install a sibling or duplicate its schema. Review-only requests make no edits.
 
 ## Compact vocabulary
 

@@ -16,7 +16,7 @@ const EXPECTED = [
   "scout.md",
   "worker.md",
 ];
-const RETIRED_FIELDS = ["display_name", "isolated", "max_turns", "isolation", "output_transcript"];
+const RETIRED_FIELDS = ["display_name", "isolated", "max_turns", "isolation", "output_transcript", "turnBudget"];
 
 function preset(name) {
   const text = fs.readFileSync(path.join(dir, name), "utf8");
@@ -40,7 +40,6 @@ test("agents use role-specific model and thinking tiers", () => {
     assert.equal(fields.name, name, file);
     assert.ok(fields.description, file);
     assert.ok(["replace", "append"].includes(fields.systemPromptMode), file);
-    assert.match(fields.turnBudget, /^\{"maxTurns":\d+,"graceTurns":\d+\}$/, file);
     for (const retired of RETIRED_FIELDS) assert.equal(fields[retired], undefined, `${file}: ${retired}`);
     assert.doesNotMatch(text, /ext:pi-web-access|skills:\s*false|extensions:\s*(?:false|pi-web-access)/);
   }
@@ -61,6 +60,35 @@ test("agents use role-specific model and thinking tiers", () => {
   for (const name of ["claim-verifier.md", "oracle.md", "worker.md", "delegate.md", "researcher.md"]) {
     assert.equal(preset(name).fields.thinking, "high", name);
   }
+});
+
+test("presets retain native context/tool differences while delegating shared discipline", () => {
+  const tools = {
+    "claim-verifier.md": "read, grep, find, ls, bash",
+    "codebase-analyzer.md": "read, grep, find, ls",
+    "delegate.md": "read, grep, find, ls, bash, edit, write, contact_supervisor",
+    "oracle.md": "read, grep, find, ls, bash, contact_supervisor",
+    "precedent-locator.md": "read, grep, find, ls, bash",
+    "researcher.md": "read, web_search, source_check, fetch_content, get_search_content",
+    "reviewer.md": "read, grep, find, ls, bash, contact_supervisor",
+    "scout.md": "read, grep, find, ls, bash",
+    "worker.md": "read, grep, find, ls, bash, edit, write, contact_supervisor",
+  };
+  for (const file of EXPECTED) {
+    const { fields } = preset(file);
+    assert.equal(fields.tools, tools[file], file);
+    assert.equal(fields.inheritProjectContext, "true", file);
+    assert.equal(fields.inheritSkills, "false", file);
+    assert.equal(fields.systemPromptMode, file === "delegate.md" ? "append" : "replace", file);
+    assert.equal(fields.defaultContext, ["delegate.md", "oracle.md", "reviewer.md", "worker.md"].includes(file) ? "fork" : undefined, file);
+  }
+  assert.equal(preset("oracle.md").fields.aliases, "advisor");
+  assert.equal(preset("worker.md").fields.aliases, "developer, coder, implementer, develop");
+  assert.doesNotMatch(preset("reviewer.md").text, /APPROVE|REQUEST_CHANGES|NEEDS_HUMAN_DECISION/);
+  assert.match(preset("reviewer.md").text, /Use `verify` as the owner/);
+  assert.match(preset("worker.md").text, /Use `implement` for delivery discipline/);
+  assert.match(preset("precedent-locator.md").text, /Never fetch/);
+  assert.match(preset("claim-verifier.md").text, /preserving order and IDs/);
 });
 
 test("read-only roles are narrow and workers can escalate", () => {
