@@ -36,7 +36,7 @@ error handling where failure would hide the answer or harm data. An unavailable
 real integration remains unverified even when a substitute behaves well.
 
 Give the recipient controls and scenarios, capture observed results, and ask for
-choices that depend on their judgment. Reuse the effort record; do not manufacture
+choices that depend on their judgment. Reuse the task's working notes; do not manufacture
 a verdict or a new ADR when no decision has been made. Promote portable logic only
 after production review and tests, within implementation authority. Cleanup covers
 only authorized throwaway files, not user work or existing records.

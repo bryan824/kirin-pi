@@ -59,12 +59,12 @@ test("test command runs owned files, not archived namesakes", () => {
       ["test/owned.test.cjs", "owned cjs"],
       ["test/owned.test.ts", "owned ts"],
       ["skills/maintenance/skill-audit/scripts/skill-cleaner.test.ts", "owned analyzer"],
-    ]) write(file, `const {test}=require("bun:test"); test(${JSON.stringify(name)},()=>{});\n`);
+    ]) write(file, `const {test}=require("bun:test"); test(${JSON.stringify(name)},()=>console.log(${JSON.stringify(`RAN ${name}`)}));\n`);
     write("context/archive/test/owned.test.cjs", 'throw new Error("ARCHIVED_TEST_MUST_NOT_RUN");\n');
     const result = spawnSync("bun", ["run", "test"], { cwd: dir, encoding: "utf8", timeout: 15_000 });
     const output = result.stdout + result.stderr;
     assert.equal(result.status, 0, output);
-    for (const name of ["owned cjs", "owned ts", "owned analyzer"]) assert.ok(output.includes(`(pass) ${name}`), output);
+    for (const name of ["owned cjs", "owned ts", "owned analyzer"]) assert.ok(output.includes(`RAN ${name}`), output);
     assert.doesNotMatch(output, /ARCHIVED_TEST_MUST_NOT_RUN/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

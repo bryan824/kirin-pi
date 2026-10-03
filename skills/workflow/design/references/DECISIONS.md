@@ -1,7 +1,7 @@
 # Decision Frontier
 
-Use when dependent uncertainty outlives the current conversation. Keep one useful
-effort record, not a workflow engine or a record per question.
+Use when dependent uncertainty outlives the current conversation. Keep one set of
+working notes for the task, not a workflow engine or a record per question.
 
 Capture the destination, standing constraints, exclusions, settled decisions and
 their evidence. Index open questions by readable titles; add stable IDs and

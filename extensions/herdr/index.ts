@@ -222,21 +222,6 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-		if (signal?.aborted) throw new Error("Aborted");
-		await new Promise<void>((resolve, reject) => {
-			const timeout = setTimeout(() => {
-				signal?.removeEventListener("abort", onAbort);
-				resolve();
-			}, ms);
-			const onAbort = () => {
-				clearTimeout(timeout);
-				reject(new Error("Aborted"));
-			};
-			signal?.addEventListener("abort", onAbort, { once: true });
-		});
-	}
-
 	async function execHerdr(args: string[], signal?: AbortSignal) {
 		throwIfAborted(signal, "herdr");
 		const result = await pi.exec("herdr", args, { signal });
@@ -273,24 +258,10 @@ export default function (pi: ExtensionAPI) {
 		return value as T;
 	}
 
-	async function execHerdrText(args: string[], signal?: AbortSignal): Promise<string> {
-		const result = await execHerdr(args, signal);
-		return result.stdout;
-	}
-
 	async function getCurrentPaneInfo(signal?: AbortSignal): Promise<PaneInfo> {
 		const pane = await getPaneInfo(currentPaneTarget, signal);
 		if (!pane) throw new Error(`Caller pane '${currentPaneTarget}' not found.`);
 		return pane;
-	}
-
-	async function getWorkspaceInfo(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceInfo> {
-		const response = await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>([
-			"workspace",
-			"get",
-			workspaceId,
-		], signal);
-		return response.result.workspace;
 	}
 
 	async function getWorkspaceList(signal?: AbortSignal): Promise<WorkspaceInfo[]> {
@@ -354,7 +325,7 @@ export default function (pi: ExtensionAPI) {
 		if (options.source) args.push("--source", options.source);
 		if (options.lines != null) args.push("--lines", String(options.lines));
 		if (options.raw) args.push("--raw");
-		return execHerdrText(args, signal);
+		return (await execHerdr(args, signal)).stdout;
 	}
 
 	function formatReadOutput(output: string): string {
@@ -383,18 +354,9 @@ export default function (pi: ExtensionAPI) {
 		return `${name}: [${pane.pane_id}]${flags ? ` (${flags})` : ""}${cwd}`;
 	}
 
-	function summarizeTab(tab: TabInfo): string {
-		const flags = [tab.focused ? "focused" : null, tab.agent_status !== "unknown" ? tab.agent_status : null]
-			.filter(Boolean)
-			.join(", ");
-		return `${tab.label}: [${tab.tab_id}]${flags ? ` (${flags})` : ""}`;
-	}
-
-	function summarizeWorkspace(workspace: WorkspaceInfo): string {
-		const flags = [workspace.focused ? "focused" : null, workspace.agent_status !== "unknown" ? workspace.agent_status : null]
-			.filter(Boolean)
-			.join(", ");
-		return `${workspace.label}: [${workspace.workspace_id}]${flags ? ` (${flags})` : ""}`;
+	function summarizeContainer(label: string, id: string, focused: boolean, status: AgentStatus): string {
+		const flags = [focused ? "focused" : null, status !== "unknown" ? status : null].filter(Boolean).join(", ");
+		return `${label}: [${id}]${flags ? ` (${flags})` : ""}`;
 	}
 
 	function rejectUnexpectedParams(
@@ -409,31 +371,33 @@ export default function (pi: ExtensionAPI) {
 		);
 	}
 
-	function formatStatusList(statuses: AgentStatus[]): string {
-		return statuses.join("|");
-	}
-
 	function throwIfAborted(signal: AbortSignal | undefined, action: string) {
 		if (signal?.aborted) {
 			throw new Error(`${action} canceled.`);
 		}
 	}
 
-	function sleepWithSignal(ms: number, signal: AbortSignal | undefined) {
-		if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
-		if (signal.aborted) return Promise.reject(new Error("wait_agent canceled."));
+	function sleep(ms: number, signal: AbortSignal | undefined, action: string): Promise<void> {
+		throwIfAborted(signal, action);
 		return new Promise<void>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				signal.removeEventListener("abort", onAbort);
-				resolve();
-			}, ms);
 			const onAbort = () => {
 				clearTimeout(timer);
-				signal.removeEventListener("abort", onAbort);
-				reject(new Error("wait_agent canceled."));
+				reject(new Error(`${action} canceled.`));
 			};
-			signal.addEventListener("abort", onAbort, { once: true });
+			const timer = setTimeout(() => {
+				signal?.removeEventListener("abort", onAbort);
+				resolve();
+			}, ms);
+			signal?.addEventListener("abort", onAbort, { once: true });
 		});
+	}
+
+	async function focusTab(tabId: string, signal?: AbortSignal): Promise<TabInfo> {
+		return (await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", tabId], signal)).result.tab;
+	}
+
+	async function focusWorkspace(workspaceId: string, signal?: AbortSignal): Promise<WorkspaceInfo> {
+		return (await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>(["workspace", "focus", workspaceId], signal)).result.workspace;
 	}
 
 	function statusDot(theme: any, status: AgentStatus): string {
@@ -449,6 +413,19 @@ export default function (pi: ExtensionAPI) {
 			default:
 				return theme.fg("dim", "·");
 		}
+	}
+
+	function statusList(
+		theme: any,
+		empty: string,
+		rows: Array<{ status: AgentStatus; label: string; highlight: boolean; extra?: string }>,
+	): Text {
+		if (!rows.length) return new Text(theme.fg("dim", empty), 0, 0);
+		const lines = rows.map(({ status, label, highlight, extra }) => {
+			const suffix = [extra, status !== "unknown" ? status : null].filter(Boolean).join(" ");
+			return `${statusDot(theme, status)} ${theme.fg(highlight ? "accent" : "muted", label)}${suffix ? ` ${theme.fg("dim", suffix)}` : ""}`;
+		});
+		return new Text(lines.join("\n"), 0, 0);
 	}
 
 	pi.registerTool({
@@ -535,7 +512,7 @@ export default function (pi: ExtensionAPI) {
 				case "workspace_list": {
 					const workspaces = await getWorkspaceList(signal);
 					const text = workspaces.length
-						? workspaces.map(summarizeWorkspace).join("\n")
+						? workspaces.map((w) => summarizeContainer(w.label, w.workspace_id, w.focused, w.agent_status)).join("\n")
 						: "No workspaces.";
 					return {
 						content: [{ type: "text", text }],
@@ -576,21 +553,17 @@ export default function (pi: ExtensionAPI) {
 				case "workspace_focus": {
 					const workspaceId = params.workspace;
 					if (!workspaceId) throw new Error("'workspace' is required for workspace_focus");
-					const response = await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>([
-						"workspace",
-						"focus",
-						workspaceId,
-					], signal);
+					const workspace = await focusWorkspace(workspaceId, signal);
 					return {
-						content: [{ type: "text", text: `Focused workspace '${response.result.workspace.label}'` }],
-						details: withSnapshot({ action: "workspace_focus", workspace: response.result.workspace }),
+						content: [{ type: "text", text: `Focused workspace '${workspace.label}'` }],
+						details: withSnapshot({ action: "workspace_focus", workspace }),
 					};
 				}
 
 				case "tab_list": {
 					const workspaceId = params.workspace ?? currentWorkspaceId;
 					const tabs = await getTabList(workspaceId, signal);
-					const text = tabs.length ? tabs.map(summarizeTab).join("\n") : "No tabs.";
+					const text = tabs.length ? tabs.map((t) => summarizeContainer(t.label, t.tab_id, t.focused, t.agent_status)).join("\n") : "No tabs.";
 					return {
 						content: [{ type: "text", text }],
 						details: withSnapshot({ action: "tab_list", tabs, workspaceId }),
@@ -628,41 +601,37 @@ export default function (pi: ExtensionAPI) {
 				case "tab_focus": {
 					const tabId = params.tab;
 					if (!tabId) throw new Error("'tab' is required for tab_focus");
-					const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", tabId], signal);
+					const tab = await focusTab(tabId, signal);
 					return {
-						content: [{ type: "text", text: `Focused tab '${response.result.tab.label}'` }],
-						details: withSnapshot({ action: "tab_focus", tab: response.result.tab }),
+						content: [{ type: "text", text: `Focused tab '${tab.label}'` }],
+						details: withSnapshot({ action: "tab_focus", tab }),
 					};
 				}
 
 				case "focus": {
 					if (params.tab) {
-						const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", params.tab], signal);
+						const tab = await focusTab(params.tab, signal);
 						return {
-							content: [{ type: "text", text: `Focused tab '${response.result.tab.label}'` }],
-							details: withSnapshot({ action: "focus", target: "tab", tab: response.result.tab }),
+							content: [{ type: "text", text: `Focused tab '${tab.label}'` }],
+							details: withSnapshot({ action: "focus", target: "tab", tab }),
 						};
 					}
 					if (params.workspace) {
-						const response = await execHerdrJson<{ result: { workspace: WorkspaceInfo } }>([
-							"workspace",
-							"focus",
-							params.workspace,
-						], signal);
+						const workspace = await focusWorkspace(params.workspace, signal);
 						return {
-							content: [{ type: "text", text: `Focused workspace '${response.result.workspace.label}'` }],
-							details: withSnapshot({ action: "focus", target: "workspace", workspace: response.result.workspace }),
+							content: [{ type: "text", text: `Focused workspace '${workspace.label}'` }],
+							details: withSnapshot({ action: "focus", target: "workspace", workspace }),
 						};
 					}
 					if (params.pane) {
 						const resolved = await requirePaneRef(params.pane, signal);
-						const response = await execHerdrJson<{ result: { tab: TabInfo } }>(["tab", "focus", resolved.pane.tab_id], signal);
+						const tab = await focusTab(resolved.pane.tab_id, signal);
 						return {
 							content: [{
 								type: "text",
-								text: `Focused tab '${response.result.tab.label}' for pane '${resolved.pane.pane_id}'. Herdr does not expose direct pane focus yet.`,
+								text: `Focused tab '${tab.label}' for pane '${resolved.pane.pane_id}'. Herdr does not expose direct pane focus yet.`,
 							}],
-							details: withSnapshot({ action: "focus", target: "pane", paneId: resolved.pane.pane_id, tab: response.result.tab }),
+							details: withSnapshot({ action: "focus", target: "pane", paneId: resolved.pane.pane_id, tab }),
 						};
 					}
 					throw new Error("'workspace', 'tab', or 'pane' is required for focus");
@@ -713,7 +682,7 @@ export default function (pi: ExtensionAPI) {
 					const targetPane = await requirePaneRef(paneRef, signal);
 					await execHerdr(["pane", "run", targetPane.pane.pane_id, command], signal);
 
-					await sleep(800, signal);
+					await sleep(800, signal, "run");
 					const initialOutput = await readPane(
 						targetPane.pane.pane_id,
 						{
@@ -883,17 +852,17 @@ export default function (pi: ExtensionAPI) {
 						if (satisfied) break;
 						if (deadline != null && Date.now() >= deadline) {
 							throw new Error(
-								`Timed out waiting for panes [${snapshot.map((item) => item.pane).join(", ")}] to reach ${mode} of statuses '${formatStatusList(statuses)}'. Last statuses: ${snapshot.map((item) => `${item.pane}=${item.status}`).join(", ")}`,
+								`Timed out waiting for panes [${snapshot.map((item) => item.pane).join(", ")}] to reach ${mode} of statuses '${statuses.join("|")}'. Last statuses: ${snapshot.map((item) => `${item.pane}=${item.status}`).join(", ")}`,
 							);
 						}
-						await sleepWithSignal(250, signal);
+						await sleep(250, signal, "wait_agent");
 					}
 
 					const summary = snapshot.map((item) => `${item.pane}=${item.status}`).join(", ");
 					return {
 						content: [{
 							type: "text",
-							text: `wait_agent satisfied (${mode}: ${formatStatusList(statuses)})\n\n${summary}`,
+							text: `wait_agent satisfied (${mode}: ${statuses.join("|")})\n\n${summary}`,
 						}],
 						details: withSnapshot({
 							action: "wait_agent",
@@ -1068,42 +1037,23 @@ export default function (pi: ExtensionAPI) {
 					return new Text(theme.fg("accent", `◎ ${details.target}`), 0, 0);
 				}
 				case "workspace_list": {
-					const workspaces = details.workspaces as WorkspaceInfo[];
-					if (!workspaces?.length) return new Text(theme.fg("dim", "no workspaces"), 0, 0);
-					const lines = workspaces.map((workspace) => {
-						const dot = statusDot(theme, workspace.agent_status);
-						const label = theme.fg(workspace.focused ? "accent" : "muted", workspace.label || workspace.workspace_id);
-						const extra = [workspace.workspace_id, workspace.agent_status !== "unknown" ? workspace.agent_status : null]
-							.filter(Boolean)
-							.join(" ");
-						return `${dot} ${label}${extra ? ` ${theme.fg("dim", extra)}` : ""}`;
-					});
-					return new Text(lines.join("\n"), 0, 0);
+					const workspaces = (details.workspaces ?? []) as WorkspaceInfo[];
+					return statusList(theme, "no workspaces", workspaces.map((w) => ({
+						status: w.agent_status, label: w.label || w.workspace_id, highlight: w.focused, extra: w.workspace_id,
+					})));
 				}
 				case "tab_list": {
-					const tabs = details.tabs as TabInfo[];
-					if (!tabs?.length) return new Text(theme.fg("dim", "no tabs"), 0, 0);
-					const lines = tabs.map((tab) => {
-						const dot = statusDot(theme, tab.agent_status);
-						const label = theme.fg(tab.focused ? "accent" : "muted", tab.label || tab.tab_id);
-						const extra = [tab.tab_id, tab.agent_status !== "unknown" ? tab.agent_status : null].filter(Boolean).join(" ");
-						return `${dot} ${label}${extra ? ` ${theme.fg("dim", extra)}` : ""}`;
-					});
-					return new Text(lines.join("\n"), 0, 0);
+					const tabs = (details.tabs ?? []) as TabInfo[];
+					return statusList(theme, "no tabs", tabs.map((t) => ({
+						status: t.agent_status, label: t.label || t.tab_id, highlight: t.focused, extra: t.tab_id,
+					})));
 				}
 				case "list": {
-					const panes = details.panes as PaneInfo[];
-					if (!panes?.length) return new Text(theme.fg("dim", "no panes"), 0, 0);
+					const panes = (details.panes ?? []) as PaneInfo[];
 					const paneAliases = (details.paneAliases || {}) as Record<string, string>;
-					const lines = panes.map((pane) => {
-						const dot = statusDot(theme, pane.agent_status);
-						const label = paneAliases[pane.pane_id]
-							? theme.fg("accent", paneAliases[pane.pane_id])
-							: theme.fg("muted", pane.pane_id);
-						const extra = [pane.agent, pane.agent_status !== "unknown" ? pane.agent_status : null].filter(Boolean).join(" ");
-						return `${dot} ${label}${extra ? ` ${theme.fg("dim", extra)}` : ""}`;
-					});
-					return new Text(lines.join("\n"), 0, 0);
+					return statusList(theme, "no panes", panes.map((p) => ({
+						status: p.agent_status, label: paneAliases[p.pane_id] || p.pane_id, highlight: Boolean(paneAliases[p.pane_id]), extra: p.agent,
+					})));
 				}
 				default: {
 					const content = result.content?.[0];

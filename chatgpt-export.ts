@@ -59,14 +59,16 @@ function stripTags(fragment: string): string {
 	);
 }
 
+function emphasis(fragment: string): string {
+	for (const [tag, mark] of [["strong", "**"], ["b", "**"], ["em", "_"], ["i", "_"]]) {
+		fragment = fragment.replace(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi"), `${mark}$1${mark}`);
+	}
+	return fragment;
+}
+
 function inlineMarkdown(fragment: string): string {
 	return stripTags(
-		fragment
-			.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_full, code) => `\`${stripTags(code).trim()}\``)
-			.replace(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi, "**$1**")
-			.replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "**$1**")
-			.replace(/<em\b[^>]*>([\s\S]*?)<\/em>/gi, "_$1_")
-			.replace(/<i\b[^>]*>([\s\S]*?)<\/i>/gi, "_$1_"),
+		emphasis(fragment.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_full, code) => `\`${stripTags(code).trim()}\``)),
 	)
 		.replace(/\s+/g, " ")
 		.trim();
@@ -104,22 +106,15 @@ function htmlToMarkdown(contentHtml: string): string {
 			return protect(`${fence}${pad}${value}${pad}${fence}`);
 		});
 
-	text = text
+	text = emphasis(text
 		.replace(/<span\b[^>]*data-testid=(?:"webpage-citation-pill"|'webpage-citation-pill'|webpage-citation-pill)[\s\S]*?<\/span>\s*<\/span>/gi, "")
-		.replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, (_full, inner) => `\n# ${inlineMarkdown(inner)}\n\n`)
-		.replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, (_full, inner) => `\n## ${inlineMarkdown(inner)}\n\n`)
-		.replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, (_full, inner) => `\n### ${inlineMarkdown(inner)}\n\n`)
-		.replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, (_full, inner) => `\n#### ${inlineMarkdown(inner)}\n\n`)
+		.replace(/<h([1-4])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_full, level: string, inner: string) => `\n${"#".repeat(Number(level))} ${inlineMarkdown(inner)}\n\n`)
 		.replace(/<hr\b[^>]*>/gi, "\n---\n")
 		.replace(/<li\b[^>]*>/gi, "\n- ")
 		.replace(/<\/li>/gi, "")
 		.replace(/<br\s*\/?\s*>/gi, "\n")
 		.replace(/<\/p>/gi, "\n\n")
-		.replace(/<p\b[^>]*>/gi, "")
-		.replace(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi, "**$1**")
-		.replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "**$1**")
-		.replace(/<em\b[^>]*>([\s\S]*?)<\/em>/gi, "_$1_")
-		.replace(/<i\b[^>]*>([\s\S]*?)<\/i>/gi, "_$1_")
+		.replace(/<p\b[^>]*>/gi, ""))
 		.replace(/<\/(div|section|article|ul|ol|blockquote|table|thead|tbody|tr)>/gi, "\n")
 		.replace(/<[^>]+>/g, "");
 

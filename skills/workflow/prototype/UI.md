@@ -40,7 +40,7 @@ inferring success from a fixture.
 
 Present artifact/run instructions, named directions, their trade-offs and evidence.
 The human chooses; do not infer a winner or promote an unselected design. Record
-the decision in the existing effort record when continuity needs it. Implementation
+the decision in the task's existing working notes when continuity needs it. Implementation
 of a selected direction still uses production standards and approved scope.
 Cleanup is limited to authorized throwaway work; no automatic publishing, route
 replacement, record deletion or removal of user changes.

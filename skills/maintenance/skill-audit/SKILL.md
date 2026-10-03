@@ -1,6 +1,6 @@
 ---
 name: skill-audit
-description: "When judging a harness, including explicit upstream absorption — measure skills, agents, extensions, and hooks for overlap, drift, conflicts, and prompt waste."
+description: "When reassessing a harness after model, host or upstream changes — measure all layers, challenge the architecture, and propose leaner behavior."
 ---
 
 # Skill Audit
@@ -8,8 +8,12 @@ description: "When judging a harness, including explicit upstream absorption —
 Measure first; `write-skill` owns skill consolidation and `architecture` owns
 structural judgment across the harness.
 
+For a model-upgrade or whole-harness reassessment, load [Harness review](references/HARNESS_REVIEW.md).
 For an explicit upstream review or absorption request, load [Upstream review](references/UPSTREAM_REVIEW.md).
-Ordinary audits stay local: do not fetch upstreams or advance their checkpoints.
+Both use [Behavior probes](references/BEHAVIOR_PROBES.md) when comparison evidence is needed.
+Narrow local audits stay local. Whole-harness reassessments include bounded official
+Pi/Claude Code release and documentation checks; broader upstream absorption and
+checkpoint edits remain explicit.
 
 Resolve `SKILL_DIR` to the directory containing this loaded `SKILL.md`, not a
 checkout-relative path. For an isolated inventory, run:

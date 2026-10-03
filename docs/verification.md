@@ -44,6 +44,12 @@ growth/update/fix owner, preserving resolved constraints across a handoff, and
 avoiding invented docs or missing-sibling dependencies. Inspect actual decisions/tool traces; a static phrase match,
 grader-only result or another project's test is not behavioral evidence.
 
+For repeatable harness/model reassessment, use the audit's
+[behavior probes](../skills/maintenance/skill-audit/references/BEHAVIOR_PROBES.md).
+Keep model and harness comparisons separate. Hand-injected prompts can test
+instruction decisions, not native discovery, loaded defaults or live-host parity.
+A few successful cases do not establish universal model superiority.
+
 Use actual host inventory when claiming effective skills/presets. Filesystem
 presence and frontmatter are not enabled selection. Resource/metadata fixtures
 must disable extension/model execution and isolate settings, roots and artifacts.

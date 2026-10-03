@@ -25,17 +25,17 @@ already supply approved intent; do not turn it into another interview.
   with what matters most, and welcome partial answers or uncertainty. Do not
   invent the absent person's preference.
 - State the proposed outcome, exclusions, contracts, test seams, assumptions and
-  consequential trade-offs clearly enough to approve. Approval is contextual
-  assent to that direction, not a password. Silence is not consent; a material
-  expansion needs renewed approval. If no decision-maker is available, report
-  the blocked choice rather than guessing through it.
+  consequential trade-offs clearly enough to approve. Approval means the user
+  agreed to this direction in context; no magic word is needed, and silence is
+  not approval. A material expansion needs fresh approval. If no decision-maker
+  is available, report the blocked choice rather than guessing through it.
 - Prefer small verifiable, reversible outcomes. Probe load-bearing assumptions
   before designing around them; name what would invalidate the direction.
   Compare architecture or build an authorized prototype when evidence would
   settle the choice more cheaply than discussion.
 
 For dependent choices spanning sessions, use [Decision frontier](references/DECISIONS.md)
-inside an existing effort record. When continuity needs it and writing is authorized,
+inside the task's existing working notes. When continuity needs it and writing is authorized,
 capture settled constraints, explicit no-s, ordering/numeric requirements and their
 reasons as they land, not only in a final summary. Put agreed terms beside the
 contract they clarify; a glossary is not a spec. No per-question record, glossary,
@@ -43,5 +43,5 @@ or planning artifact is required merely to finish an interview.
 
 Deliver: approved intent and boundaries, acceptance/contract decisions, unresolved
 prerequisites and their owners. Proceed within clear implementation authority;
-use a plan when risk, dependencies or handoff need one. Design itself grants no
-permission to scaffold, commit, publish or change scope.
+use a plan when risk, dependencies or handoff need one. `plan` and `implement`
+defer to these approval rules.

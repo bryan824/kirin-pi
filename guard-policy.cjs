@@ -130,66 +130,38 @@ function moduleAfterPython(tokens, commandIndex) {
   return undefined;
 }
 
-function disabledPipMessage(name = "pip") {
-  return [
-    `Error: ${name} is disabled. Use uv instead:`,
-    "",
-    "  To install a package for a script: uv run --with PACKAGE python script.py",
-    "  To add a dependency to the project: uv add PACKAGE",
-    "",
-  ].join("\n");
+// Each block explains the uv replacement, so the agent can retry correctly.
+function useUv(problem, hints, verb = "Use uv instead:") {
+  return [`Error: ${problem}${verb ? ` ${verb}` : ""}`, "", ...hints.map((hint) => `  ${hint}`), ""].join("\n");
 }
 
-function disabledPoetryMessage() {
-  return [
-    "Error: poetry is disabled. Use uv instead:",
-    "",
-    "  To initialize a project: uv init",
-    "  To add a dependency: uv add PACKAGE",
-    "  To sync dependencies: uv sync",
-    "  To run commands: uv run COMMAND",
-    "",
-  ].join("\n");
-}
+const INSTALL_HINTS = [
+  "To install a package for a script: uv run --with PACKAGE python script.py",
+  "To add a dependency to the project: uv add PACKAGE",
+];
 
-function disabledPythonPipMessage() {
-  return [
-    "Error: 'python -m pip' is disabled. Use uv instead:",
-    "",
-    "  To install a package for a script: uv run --with PACKAGE python script.py",
-    "  To add a dependency to the project: uv add PACKAGE",
-    "",
-  ].join("\n");
-}
+const MODULE_MESSAGES = {
+  pip: useUv("'python -m pip' is disabled.", INSTALL_HINTS),
+  venv: useUv("'python -m venv' is disabled.", ["To create a virtual environment: uv venv"]),
+  py_compile: useUv("'python -m py_compile' is disabled because it writes .pyc files to __pycache__.", [
+    "To verify syntax without bytecode output: uv run python -m ast path/to/file.py >/dev/null",
+  ], ""),
+};
 
-function disabledPythonVenvMessage() {
-  return [
-    "Error: 'python -m venv' is disabled. Use uv instead:",
-    "",
-    "  To create a virtual environment: uv venv",
-    "",
-  ].join("\n");
-}
+const POETRY_MESSAGE = useUv("poetry is disabled.", [
+  "To initialize a project: uv init",
+  "To add a dependency: uv add PACKAGE",
+  "To sync dependencies: uv sync",
+  "To run commands: uv run COMMAND",
+]);
 
-function disabledPythonPyCompileMessage() {
-  return [
-    "Error: 'python -m py_compile' is disabled because it writes .pyc files to __pycache__.",
-    "",
-    "  To verify syntax without bytecode output: uv run python -m ast path/to/file.py >/dev/null",
-    "",
-  ].join("\n");
-}
-
-function disabledDirectPythonMessage(name = "python") {
-  return [
-    `Error: direct ${name} is disabled. Use uv instead:`,
-    "",
-    "  To run a script: uv run script.py",
-    "  To run Python code: uv run python -c 'print(1)'",
-    "  To use a specific version: uv run -p 3.12 python -c 'print(1)'",
-    "  To run a standalone versioned interpreter: uvx python@3.12 -c 'print(1)'",
-    "",
-  ].join("\n");
+function directPythonMessage(name) {
+  return useUv(`direct ${name} is disabled.`, [
+    "To run a script: uv run script.py",
+    "To run Python code: uv run python -c 'print(1)'",
+    "To use a specific version: uv run -p 3.12 python -c 'print(1)'",
+    "To run a standalone versioned interpreter: uvx python@3.12 -c 'print(1)'",
+  ]);
 }
 
 function getBlockedPythonToolMessage(command) {
@@ -203,20 +175,11 @@ function getBlockedPythonToolMessage(command) {
     if (!cmd) continue;
     const cmdName = basename(cmd);
 
-    if (isPipCommand(cmd)) {
-      return disabledPipMessage(cmdName);
-    }
-
-    if (cmdName === "poetry") {
-      return disabledPoetryMessage();
-    }
-
+    if (isPipCommand(cmd)) return useUv(`${cmdName} is disabled.`, INSTALL_HINTS);
+    if (cmdName === "poetry") return POETRY_MESSAGE;
     if (isPythonCommand(cmd)) {
       const module = moduleAfterPython(tokens, cmdIndex);
-      if (module === "pip") return disabledPythonPipMessage();
-      if (module === "venv") return disabledPythonVenvMessage();
-      if (module === "py_compile") return disabledPythonPyCompileMessage();
-      return disabledDirectPythonMessage(cmdName);
+      return Object.hasOwn(MODULE_MESSAGES, module ?? "") ? MODULE_MESSAGES[module] : directPythonMessage(cmdName);
     }
   }
 

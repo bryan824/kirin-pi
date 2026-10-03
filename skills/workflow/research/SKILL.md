@@ -21,7 +21,7 @@ familiar coding fact.
 - Independent research may be delegated within the authorized runtime and scope;
   it does not require fanout. Evidence narrows options but does not choose a
   user-owned trade-off or authorize implementation.
-- Reuse a caller-owned result or effort record when evidence must persist. A
+- Reuse the caller's result or the task's working notes when evidence must persist. A
   concise cited answer can stand alone; do not create a duplicate memo or update
   durable docs while acting read-only. Return proposed corrections to a writer.
 

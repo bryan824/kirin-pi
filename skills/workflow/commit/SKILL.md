@@ -10,13 +10,13 @@ handoff is evidence, not commit authority; a request for a message alone changes
 nothing.
 
 - Establish the authorized paths and operations. Inspect status, staged and
-  unstaged diffs, untracked candidates and recent message style. Do not include
+  unstaged diffs, untracked files and recent message style. Do not include
   unrelated or pre-existing work merely because it is dirty.
 - Preserve staged intent. Ask before unstaging or regrouping another selection.
   Never stash, clean, move user files or switch branches just to manufacture a
   clean tree. A request for all intended changes still allows logical commits;
   honor an explicit single-commit request.
-- Consume fresh verification for the same complete candidate. New code or
+- Consume fresh verification for the same complete change. New code or
   materially changed evidence requires review again; a prior pass does not cover
   later hunks. Required failed or unrun checks block the normal commit gate.
   Report any proposed exceptional checkpoint and obtain explicit authority

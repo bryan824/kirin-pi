@@ -22,5 +22,5 @@ Trace user requirements to evidence, approved deferrals, or blockers.
 - Verification:
 - Recovery / rollback:
 
-Keep only sections that help execution. Reuse a suitable effort record; runtime
+Keep only sections that help execution. Reuse the task's existing working notes; runtime
 claims and live status belong to the active runtime, not a second task store.

@@ -12,7 +12,7 @@ calling them done. Each principle below has a reference; load it when a change
 goes deep in that area, not for routine edits.
 
 Resist: hiding errors with `unwrap`/`expect`/`panic`/`assert` on user-controlled input,
-adding crates that don't cut real complexity, clever code, `git add .`/`-A`.
+adding crates that don't cut real complexity, clever code.
 
 - Respect repo `rust-toolchain.toml`/`rust-toolchain` first; `rustup` for toolchains,
   `cargo` for tasks. Scan before edits: `rustup show active-toolchain`,
@@ -35,4 +35,3 @@ adding crates that don't cut real complexity, clever code, `git add .`/`-A`.
   lint config and deeper checks (`cargo-audit`/`-hack`/`-udeps`, Miri): `references/VERIFICATION.md`.
 
 Deliver: the change, why any new crate earned its place, and the verification results.
-Stage specific paths only, and commit with Conventional Commits when the work is complete.

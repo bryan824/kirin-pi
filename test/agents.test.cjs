@@ -33,7 +33,7 @@ test("agent fleet is the approved Nico override surface", () => {
   assert.deepEqual(fs.readdirSync(dir).filter((name) => name.endsWith(".md")).sort(), EXPECTED);
 });
 
-test("agents use role-specific model and thinking tiers", () => {
+test("agents retain role tiers while reviewer inherits the selected model", () => {
   for (const file of EXPECTED) {
     const { fields, text } = preset(file);
     const name = path.basename(file, ".md");
@@ -48,10 +48,11 @@ test("agents use role-specific model and thinking tiers", () => {
   for (const name of ["codebase-analyzer.md", "precedent-locator.md", "researcher.md"]) {
     assert.equal(preset(name).fields.model, "openai-codex/gpt-5.6-terra", name);
   }
-  for (const name of ["claim-verifier.md", "reviewer.md", "oracle.md", "worker.md", "delegate.md"]) {
+  for (const name of ["claim-verifier.md", "oracle.md", "worker.md", "delegate.md"]) {
     assert.equal(preset(name).fields.model, "openai-codex/gpt-6-astra", name);
   }
 
+  assert.equal(preset("reviewer.md").fields.model, undefined, "reviewer must not pin an aging model");
   assert.equal(preset("scout.md").fields.thinking, "low");
   assert.equal(preset("reviewer.md").fields.thinking, "xhigh");
   for (const name of ["codebase-analyzer.md", "precedent-locator.md"]) {
@@ -59,6 +60,21 @@ test("agents use role-specific model and thinking tiers", () => {
   }
   for (const name of ["claim-verifier.md", "oracle.md", "worker.md", "delegate.md", "researcher.md"]) {
     assert.equal(preset(name).fields.thinking, "high", name);
+  }
+});
+
+test("README model table matches the agent defaults", () => {
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  const section = readme.split("### Subagent presets\n")[1].split("\n## ")[0];
+  const rows = new Map([...section.matchAll(/^\| `([^`]+)` \| ([^|]+) \|/gm)]
+    .map(([, name, cell]) => [name, cell.trim()]));
+  for (const file of EXPECTED) {
+    const { fields } = preset(file);
+    const cell = rows.get(fields.name);
+    assert.ok(cell, file);
+    assert.ok(cell.endsWith(` / ${fields.thinking}`), `${file}: thinking`);
+    if (fields.model) assert.ok(cell.includes(`\`${fields.model.split("/").at(-1)}\``), `${file}: model`);
+    else assert.match(cell, /\binherit(?:s|ed)?\b/i, `${file}: inherited model`);
   }
 });
 
@@ -80,7 +96,8 @@ test("presets retain native context/tool differences while delegating shared dis
     assert.equal(fields.inheritProjectContext, "true", file);
     assert.equal(fields.inheritSkills, "false", file);
     assert.equal(fields.systemPromptMode, file === "delegate.md" ? "append" : "replace", file);
-    assert.equal(fields.defaultContext, ["delegate.md", "oracle.md", "reviewer.md", "worker.md"].includes(file) ? "fork" : undefined, file);
+    const context = file === "reviewer.md" ? "fresh" : ["delegate.md", "oracle.md", "worker.md"].includes(file) ? "fork" : undefined;
+    assert.equal(fields.defaultContext, context, file);
   }
   assert.equal(preset("oracle.md").fields.aliases, "advisor");
   assert.equal(preset("worker.md").fields.aliases, "developer, coder, implementer, develop");

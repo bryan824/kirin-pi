@@ -9,11 +9,11 @@
  * - messages/day
  * - tokens/day (if available)
  * - cost/day (if available)
- * - model breakdown (sessions/messages/tokens + cost)
+ * - breakdown by model, directory, weekday and time of day
  *
  * Graph:
  * - GitHub-contributions-style calendar (weeks x weekdays)
- * - Hue: weighted mix of popular model colors (weighted by the selected metric)
+ * - Hue: weighted mix of the view's popular keys (weighted by the selected metric)
  * - Brightness: selected metric per day (log-scaled)
  */
 
@@ -32,15 +32,25 @@ import path from "node:path";
 import { createReadStream } from "node:fs";
 import readline from "node:readline";
 
-type ModelKey = string; // `${provider}/${model}`
-type CwdKey = string; // normalized cwd path
-type DowKey = string; // "Mon", "Tue", etc.
-type TodKey = string; // "after-midnight", "morning", "afternoon", "evening", "night"
 type BreakdownView = "model" | "cwd" | "dow" | "tod";
+type MeasurementMode = "sessions" | "messages" | "tokens";
+type DimensionView = Exclude<BreakdownView, "model">;
 
-const DOW_NAMES: DowKey[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+interface Totals {
+	sessions: number;
+	messages: number;
+	tokens: number;
+	cost: number;
+}
 
-const TOD_BUCKETS: { key: TodKey; label: string; from: number; to: number }[] = [
+/** Totals per key (`provider/model`, cwd, weekday, time-of-day bucket) for each view. */
+type ByView = Record<BreakdownView, Map<string, Totals>>;
+
+const VIEWS: BreakdownView[] = ["model", "cwd", "dow", "tod"];
+const DIMENSION_VIEWS: DimensionView[] = ["cwd", "dow", "tod"];
+const DOW_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const TOD_BUCKETS: { key: string; label: string; from: number; to: number }[] = [
 	{ key: "after-midnight", label: "After midnight (0–5)", from: 0, to: 5 },
 	{ key: "morning", label: "Morning (6–11)", from: 6, to: 11 },
 	{ key: "afternoon", label: "Afternoon (12–16)", from: 12, to: 16 },
@@ -48,77 +58,37 @@ const TOD_BUCKETS: { key: TodKey; label: string; from: number; to: number }[] = 
 	{ key: "night", label: "Night (22–23)", from: 22, to: 23 },
 ];
 
-function todBucketForHour(hour: number): TodKey {
-	for (const b of TOD_BUCKETS) {
-		if (hour >= b.from && hour <= b.to) return b.key;
-	}
-	return "after-midnight";
+function todBucketForHour(hour: number): string {
+	return TOD_BUCKETS.find((b) => hour >= b.from && hour <= b.to)?.key ?? "after-midnight";
 }
 
-function todBucketLabel(key: TodKey): string {
+function todBucketLabel(key: string): string {
 	return TOD_BUCKETS.find((b) => b.key === key)?.label ?? key;
 }
 
 interface ParsedSession {
-	filePath: string;
 	startedAt: Date;
 	dayKeyLocal: string; // YYYY-MM-DD (local)
-	cwd: CwdKey | null;
-	dow: DowKey;
-	tod: TodKey;
-	modelsUsed: Set<ModelKey>;
-	messages: number;
-	tokens: number;
-	totalCost: number;
-	costByModel: Map<ModelKey, number>;
-	messagesByModel: Map<ModelKey, number>;
-	tokensByModel: Map<ModelKey, number>;
+	total: Totals;
+	models: Map<string, Totals>; // sessions=1 only for models the session actually used
+	cwd: string | null;
+	dow: string;
+	tod: string;
 }
 
-interface DayAgg {
+interface Aggregate {
+	total: Totals;
+	by: ByView;
+}
+
+interface DayAgg extends Aggregate {
 	date: Date; // local midnight
 	dayKeyLocal: string;
-	sessions: number;
-	messages: number;
-	tokens: number;
-	totalCost: number;
-	costByModel: Map<ModelKey, number>;
-	sessionsByModel: Map<ModelKey, number>;
-	messagesByModel: Map<ModelKey, number>;
-	tokensByModel: Map<ModelKey, number>;
-	sessionsByCwd: Map<CwdKey, number>;
-	messagesByCwd: Map<CwdKey, number>;
-	tokensByCwd: Map<CwdKey, number>;
-	costByCwd: Map<CwdKey, number>;
-	sessionsByTod: Map<TodKey, number>;
-	messagesByTod: Map<TodKey, number>;
-	tokensByTod: Map<TodKey, number>;
-	costByTod: Map<TodKey, number>;
 }
 
-interface RangeAgg {
+interface RangeAgg extends Aggregate {
 	days: DayAgg[];
 	dayByKey: Map<string, DayAgg>;
-	sessions: number;
-	totalMessages: number;
-	totalTokens: number;
-	totalCost: number;
-	modelCost: Map<ModelKey, number>;
-	modelSessions: Map<ModelKey, number>; // number of sessions where model was used
-	modelMessages: Map<ModelKey, number>;
-	modelTokens: Map<ModelKey, number>;
-	cwdCost: Map<CwdKey, number>;
-	cwdSessions: Map<CwdKey, number>;
-	cwdMessages: Map<CwdKey, number>;
-	cwdTokens: Map<CwdKey, number>;
-	dowCost: Map<DowKey, number>;
-	dowSessions: Map<DowKey, number>;
-	dowMessages: Map<DowKey, number>;
-	dowTokens: Map<DowKey, number>;
-	todCost: Map<TodKey, number>;
-	todSessions: Map<TodKey, number>;
-	todMessages: Map<TodKey, number>;
-	todTokens: Map<TodKey, number>;
 }
 
 interface RGB {
@@ -127,32 +97,18 @@ interface RGB {
 	b: number;
 }
 
+interface Palette {
+	colors: Map<string, RGB>;
+	ordered: string[];
+}
+
 interface BreakdownData {
 	generatedAt: Date;
 	ranges: Map<number, RangeAgg>;
-	palette: {
-		modelColors: Map<ModelKey, RGB>;
-		otherColor: RGB;
-		orderedModels: ModelKey[];
-	};
-	cwdPalette: {
-		cwdColors: Map<CwdKey, RGB>;
-		otherColor: RGB;
-		orderedCwds: CwdKey[];
-	};
-	dowPalette: {
-		dowColors: Map<DowKey, RGB>;
-		orderedDows: DowKey[];
-	};
-	todPalette: {
-		todColors: Map<TodKey, RGB>;
-		orderedTods: TodKey[];
-	};
+	palettes: Record<BreakdownView, Palette>;
 }
 
 const RANGE_DAYS = [7, 30, 90] as const;
-
-type MeasurementMode = "sessions" | "messages" | "tokens";
 
 type BreakdownProgressPhase = "scan" | "parse" | "finalize";
 
@@ -176,8 +132,9 @@ function setBorderedLoaderMessage(loader: BorderedLoader, message: string) {
 // Dark-ish background and empty cell color (close to GitHub dark)
 const DEFAULT_BG: RGB = { r: 13, g: 17, b: 23 };
 const EMPTY_CELL_BG: RGB = { r: 22, g: 27, b: 34 };
+const OTHER_COLOR: RGB = { r: 160, g: 160, b: 160 };
 
-// Default palette (assigned to top models)
+// Default palette (assigned to top models and directories)
 const PALETTE: RGB[] = [
 	{ r: 64, g: 196, b: 99 }, // green
 	{ r: 47, g: 129, b: 247 }, // blue
@@ -185,6 +142,42 @@ const PALETTE: RGB[] = [
 	{ r: 255, g: 159, b: 10 }, // orange
 	{ r: 244, g: 67, b: 54 }, // red
 ];
+
+// Fixed palette for day-of-week: weekdays get cool tones, weekend gets warm
+const DOW_PALETTE: RGB[] = [
+	{ r: 47, g: 129, b: 247 },  // Mon – blue
+	{ r: 64, g: 196, b: 99 },   // Tue – green
+	{ r: 163, g: 113, b: 247 }, // Wed – purple
+	{ r: 47, g: 175, b: 200 },  // Thu – teal
+	{ r: 100, g: 200, b: 150 }, // Fri – mint
+	{ r: 255, g: 159, b: 10 },  // Sat – orange
+	{ r: 244, g: 67, b: 54 },   // Sun – red
+];
+
+// Fixed palette for time-of-day buckets, in TOD_BUCKETS order
+const TOD_PALETTE: RGB[] = [
+	{ r: 100, g: 60, b: 180 }, // after midnight – deep purple
+	{ r: 255, g: 200, b: 50 }, // morning – golden yellow
+	{ r: 64, g: 196, b: 99 },  // afternoon – green
+	{ r: 47, g: 129, b: 247 }, // evening – blue
+	{ r: 60, g: 40, b: 140 },  // night – dark indigo
+];
+
+const emptyTotals = (): Totals => ({ sessions: 0, messages: 0, tokens: 0, cost: 0 });
+const emptyByView = (): ByView => ({ model: new Map(), cwd: new Map(), dow: new Map(), tod: new Map() });
+
+function addTotals(into: Totals, from: Totals): void {
+	into.sessions += from.sessions;
+	into.messages += from.messages;
+	into.tokens += from.tokens;
+	into.cost += from.cost;
+}
+
+function totalsFor(map: Map<string, Totals>, key: string): Totals {
+	let totals = map.get(key);
+	if (!totals) map.set(key, (totals = emptyTotals()));
+	return totals;
+}
 
 function clamp01(x: number): number {
 	return Math.max(0, Math.min(1, x));
@@ -314,7 +307,7 @@ function mondayIndex(date: Date): number {
 	return (date.getDay() + 6) % 7;
 }
 
-function modelKeyFromParts(provider?: unknown, model?: unknown): ModelKey | null {
+function modelKeyFromParts(provider?: unknown, model?: unknown): string | null {
 	const p = typeof provider === "string" ? provider.trim() : "";
 	const m = typeof model === "string" ? model.trim() : "";
 	if (!p && !m) return null;
@@ -345,97 +338,72 @@ function extractProviderModelAndUsage(obj: any): { provider?: any; model?: any; 
 	};
 }
 
-function extractCostTotal(usage: any): number {
-	if (!usage) return 0;
-	const c = usage?.cost;
-	if (typeof c === "number") return Number.isFinite(c) ? c : 0;
-	if (typeof c === "string") {
-		const n = Number(c);
-		return Number.isFinite(n) ? n : 0;
-	}
-	const t = c?.total;
-	if (typeof t === "number") return Number.isFinite(t) ? t : 0;
-	if (typeof t === "string") {
-		const n = Number(t);
+function readNum(v: any): number {
+	if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+	if (typeof v === "string") {
+		const n = Number(v);
 		return Number.isFinite(n) ? n : 0;
 	}
 	return 0;
 }
 
+function extractCostTotal(usage: any): number {
+	const c = usage?.cost;
+	return typeof c === "number" || typeof c === "string" ? readNum(c) : readNum(c?.total);
+}
+
 function extractTokensTotal(usage: any): number {
 	// Usage format varies across providers and pi versions.
 	// We try a few common shapes:
-	// - { totalTokens }
-	// - { total_tokens }
-	// - { promptTokens, completionTokens }
-	// - { prompt_tokens, completion_tokens }
-	// - { input_tokens, output_tokens }
-	// - { inputTokens, outputTokens }
-	// - { tokens: number | { total } }
+	// - { totalTokens } / { total_tokens } / { tokens: number | { total } }
+	// - { promptTokens, completionTokens } / { prompt_tokens, completion_tokens }
+	// - { inputTokens, outputTokens } / { input_tokens, output_tokens }
 	if (!usage) return 0;
 
-	const readNum = (v: any): number => {
-		if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-		if (typeof v === "string") {
-			const n = Number(v);
-			return Number.isFinite(n) ? n : 0;
-		}
-		return 0;
-	};
-
-	let total = 0;
-	// direct totals
-	total =
-		readNum(usage?.totalTokens) ||
-		readNum(usage?.total_tokens) ||
-		readNum(usage?.tokens) ||
-		readNum(usage?.tokenCount) ||
-		readNum(usage?.token_count);
+	const total =
+		readNum(usage.totalTokens) ||
+		readNum(usage.total_tokens) ||
+		readNum(usage.tokens) ||
+		readNum(usage.tokenCount) ||
+		readNum(usage.token_count) ||
+		readNum(usage.tokens?.total) ||
+		readNum(usage.tokens?.totalTokens) ||
+		readNum(usage.tokens?.total_tokens);
 	if (total > 0) return total;
 
-	// nested tokens object
-	total = readNum(usage?.tokens?.total) || readNum(usage?.tokens?.totalTokens) || readNum(usage?.tokens?.total_tokens);
-	if (total > 0) return total;
-
-	// sum of parts
-	const a =
-		readNum(usage?.promptTokens) ||
-		readNum(usage?.prompt_tokens) ||
-		readNum(usage?.inputTokens) ||
-		readNum(usage?.input_tokens);
-	const b =
-		readNum(usage?.completionTokens) ||
-		readNum(usage?.completion_tokens) ||
-		readNum(usage?.outputTokens) ||
-		readNum(usage?.output_tokens);
-	const sum = a + b;
+	const input = readNum(usage.promptTokens) || readNum(usage.prompt_tokens) || readNum(usage.inputTokens) || readNum(usage.input_tokens);
+	const output =
+		readNum(usage.completionTokens) || readNum(usage.completion_tokens) || readNum(usage.outputTokens) || readNum(usage.output_tokens);
+	const sum = input + output;
 	return sum > 0 ? sum : 0;
 }
 
 async function parseSessionFile(filePath: string, signal?: AbortSignal): Promise<ParsedSession | null> {
-	const fileName = path.basename(filePath);
-	let startedAt = parseSessionStartFromFilename(fileName);
-	let currentModel: ModelKey | null = null;
-	let cwd: CwdKey | null = null;
+	let startedAt = parseSessionStartFromFilename(path.basename(filePath));
+	let currentModel: string | null = null;
+	let cwd: string | null = null;
+	const total: Totals = { ...emptyTotals(), sessions: 1 };
+	const models = new Map<string, Totals>();
 
-	const modelsUsed = new Set<ModelKey>();
-	let messages = 0;
-	let tokens = 0;
-	let totalCost = 0;
-	const costByModel = new Map<ModelKey, number>();
-	const messagesByModel = new Map<ModelKey, number>();
-	const tokensByModel = new Map<ModelKey, number>();
+	const addUsage = (model: string, usage: any) => {
+		const tokens = extractTokensTotal(usage);
+		const cost = extractCostTotal(usage);
+		if (tokens > 0) {
+			total.tokens += tokens;
+			totalsFor(models, model).tokens += tokens;
+		}
+		if (cost > 0) {
+			total.cost += cost;
+			totalsFor(models, model).cost += cost;
+		}
+	};
 
 	const stream = createReadStream(filePath, { encoding: "utf8" });
 	const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
 	try {
 		for await (const line of rl) {
-			if (signal?.aborted) {
-				rl.close();
-				stream.destroy();
-				return null;
-			}
+			if (signal?.aborted) return null;
 			if (!line) continue;
 			let obj: any;
 			try {
@@ -459,23 +427,13 @@ async function parseSessionFile(filePath: string, signal?: AbortSignal): Promise
 				const mk = modelKeyFromParts(obj.provider, obj.modelId);
 				if (mk) {
 					currentModel = mk;
-					modelsUsed.add(mk);
+					totalsFor(models, mk).sessions = 1;
 				}
 				continue;
 			}
 
 			if (obj?.type === "compaction" || obj?.type === "branch_summary") {
-				const mk = currentModel ?? "summary";
-				const tok = extractTokensTotal(obj.usage);
-				const cost = extractCostTotal(obj.usage);
-				if (tok > 0) {
-					tokens += tok;
-					tokensByModel.set(mk, (tokensByModel.get(mk) ?? 0) + tok);
-				}
-				if (cost > 0) {
-					totalCost += cost;
-					costByModel.set(mk, (costByModel.get(mk) ?? 0) + cost);
-				}
+				addUsage(currentModel ?? "summary", obj.usage);
 				continue;
 			}
 
@@ -487,25 +445,15 @@ async function parseSessionFile(filePath: string, signal?: AbortSignal): Promise
 				modelKeyFromParts(provider, modelId) ??
 				currentModel ??
 				"unknown";
-			modelsUsed.add(mk);
+			const modelTotals = totalsFor(models, mk);
+			modelTotals.sessions = 1;
 
 			// Standalone usage (including unknown kinds) is not a conversation message.
 			if (obj.type === "message") {
-				messages += 1;
-				messagesByModel.set(mk, (messagesByModel.get(mk) ?? 0) + 1);
+				total.messages += 1;
+				modelTotals.messages += 1;
 			}
-
-			const tok = extractTokensTotal(usage);
-			if (tok > 0) {
-				tokens += tok;
-				tokensByModel.set(mk, (tokensByModel.get(mk) ?? 0) + tok);
-			}
-
-			const cost = extractCostTotal(usage);
-			if (cost > 0) {
-				totalCost += cost;
-				costByModel.set(mk, (costByModel.get(mk) ?? 0) + cost);
-			}
+			addUsage(mk, usage);
 		}
 	} finally {
 		rl.close();
@@ -513,363 +461,115 @@ async function parseSessionFile(filePath: string, signal?: AbortSignal): Promise
 	}
 
 	if (!startedAt) return null;
-	const dayKeyLocal = toLocalDayKey(startedAt);
-	const dow = DOW_NAMES[mondayIndex(startedAt)];
-	const tod = todBucketForHour(startedAt.getHours());
 	return {
-		filePath,
 		startedAt,
-		dayKeyLocal,
+		dayKeyLocal: toLocalDayKey(startedAt),
+		total,
+		models,
 		cwd,
-		dow,
-		tod,
-		modelsUsed,
-		messages,
-		tokens,
-		totalCost,
-		costByModel,
-		messagesByModel,
-		tokensByModel,
+		dow: DOW_NAMES[mondayIndex(startedAt)],
+		tod: todBucketForHour(startedAt.getHours()),
 	};
 }
 
 function buildRangeAgg(days: number, now: Date): RangeAgg {
-	const end = localMidnight(now);
-	const start = addDaysLocal(end, -(days - 1));
-	const outDays: DayAgg[] = [];
-	const dayByKey = new Map<string, DayAgg>();
-
+	const start = addDaysLocal(localMidnight(now), -(days - 1));
+	const range: RangeAgg = { days: [], dayByKey: new Map(), total: emptyTotals(), by: emptyByView() };
 	for (let i = 0; i < days; i++) {
-		const d = addDaysLocal(start, i);
-		const dayKeyLocal = toLocalDayKey(d);
-		const day: DayAgg = {
-			date: d,
-			dayKeyLocal,
-			sessions: 0,
-			messages: 0,
-			tokens: 0,
-			totalCost: 0,
-			costByModel: new Map(),
-			sessionsByModel: new Map(),
-			messagesByModel: new Map(),
-			tokensByModel: new Map(),
-			sessionsByCwd: new Map(),
-			messagesByCwd: new Map(),
-			tokensByCwd: new Map(),
-			costByCwd: new Map(),
-			sessionsByTod: new Map(),
-			messagesByTod: new Map(),
-			tokensByTod: new Map(),
-			costByTod: new Map(),
-		};
-		outDays.push(day);
-		dayByKey.set(dayKeyLocal, day);
+		const date = addDaysLocal(start, i);
+		const day: DayAgg = { date, dayKeyLocal: toLocalDayKey(date), total: emptyTotals(), by: emptyByView() };
+		range.days.push(day);
+		range.dayByKey.set(day.dayKeyLocal, day);
 	}
-
-	return {
-		days: outDays,
-		dayByKey,
-		sessions: 0,
-		totalMessages: 0,
-		totalTokens: 0,
-		totalCost: 0,
-		modelCost: new Map(),
-		modelSessions: new Map(),
-		modelMessages: new Map(),
-		modelTokens: new Map(),
-		cwdCost: new Map(),
-		cwdSessions: new Map(),
-		cwdMessages: new Map(),
-		cwdTokens: new Map(),
-		dowCost: new Map(),
-		dowSessions: new Map(),
-		dowMessages: new Map(),
-		dowTokens: new Map(),
-		todCost: new Map(),
-		todSessions: new Map(),
-		todMessages: new Map(),
-		todTokens: new Map(),
-	};
+	return range;
 }
 
 function addSessionToRange(range: RangeAgg, session: ParsedSession): void {
 	const day = range.dayByKey.get(session.dayKeyLocal);
 	if (!day) return;
 
-	range.sessions += 1;
-	range.totalMessages += session.messages;
-	range.totalTokens += session.tokens;
-	range.totalCost += session.totalCost;
-	day.sessions += 1;
-	day.messages += session.messages;
-	day.tokens += session.tokens;
-	day.totalCost += session.totalCost;
-
-	// Sessions-per-model (presence)
-	for (const mk of session.modelsUsed) {
-		day.sessionsByModel.set(mk, (day.sessionsByModel.get(mk) ?? 0) + 1);
-		range.modelSessions.set(mk, (range.modelSessions.get(mk) ?? 0) + 1);
+	for (const agg of [range, day]) {
+		addTotals(agg.total, session.total);
+		for (const [model, totals] of session.models) addTotals(totalsFor(agg.by.model, model), totals);
+		for (const view of DIMENSION_VIEWS) {
+			const key = session[view];
+			if (key) addTotals(totalsFor(agg.by[view], key), session.total);
+		}
 	}
-
-	// Messages-per-model
-	for (const [mk, n] of session.messagesByModel.entries()) {
-		day.messagesByModel.set(mk, (day.messagesByModel.get(mk) ?? 0) + n);
-		range.modelMessages.set(mk, (range.modelMessages.get(mk) ?? 0) + n);
-	}
-
-	// Tokens-per-model
-	for (const [mk, n] of session.tokensByModel.entries()) {
-		day.tokensByModel.set(mk, (day.tokensByModel.get(mk) ?? 0) + n);
-		range.modelTokens.set(mk, (range.modelTokens.get(mk) ?? 0) + n);
-	}
-
-	// Cost-per-model
-	for (const [mk, cost] of session.costByModel.entries()) {
-		day.costByModel.set(mk, (day.costByModel.get(mk) ?? 0) + cost);
-		range.modelCost.set(mk, (range.modelCost.get(mk) ?? 0) + cost);
-	}
-
-	// CWD aggregation
-	const cwd = session.cwd;
-	if (cwd) {
-		day.sessionsByCwd.set(cwd, (day.sessionsByCwd.get(cwd) ?? 0) + 1);
-		range.cwdSessions.set(cwd, (range.cwdSessions.get(cwd) ?? 0) + 1);
-		day.messagesByCwd.set(cwd, (day.messagesByCwd.get(cwd) ?? 0) + session.messages);
-		range.cwdMessages.set(cwd, (range.cwdMessages.get(cwd) ?? 0) + session.messages);
-		day.tokensByCwd.set(cwd, (day.tokensByCwd.get(cwd) ?? 0) + session.tokens);
-		range.cwdTokens.set(cwd, (range.cwdTokens.get(cwd) ?? 0) + session.tokens);
-		day.costByCwd.set(cwd, (day.costByCwd.get(cwd) ?? 0) + session.totalCost);
-		range.cwdCost.set(cwd, (range.cwdCost.get(cwd) ?? 0) + session.totalCost);
-	}
-
-	// Day-of-week aggregation
-	const dow = session.dow;
-	range.dowSessions.set(dow, (range.dowSessions.get(dow) ?? 0) + 1);
-	range.dowMessages.set(dow, (range.dowMessages.get(dow) ?? 0) + session.messages);
-	range.dowTokens.set(dow, (range.dowTokens.get(dow) ?? 0) + session.tokens);
-	range.dowCost.set(dow, (range.dowCost.get(dow) ?? 0) + session.totalCost);
-
-	// Time-of-day aggregation
-	const tod = session.tod;
-	day.sessionsByTod.set(tod, (day.sessionsByTod.get(tod) ?? 0) + 1);
-	day.messagesByTod.set(tod, (day.messagesByTod.get(tod) ?? 0) + session.messages);
-	day.tokensByTod.set(tod, (day.tokensByTod.get(tod) ?? 0) + session.tokens);
-	day.costByTod.set(tod, (day.costByTod.get(tod) ?? 0) + session.totalCost);
-	range.todSessions.set(tod, (range.todSessions.get(tod) ?? 0) + 1);
-	range.todMessages.set(tod, (range.todMessages.get(tod) ?? 0) + session.messages);
-	range.todTokens.set(tod, (range.todTokens.get(tod) ?? 0) + session.tokens);
-	range.todCost.set(tod, (range.todCost.get(tod) ?? 0) + session.totalCost);
 }
 
-function sortMapByValueDesc<K extends string>(m: Map<K, number>): Array<{ key: K; value: number }> {
-	return [...m.entries()]
-		.map(([key, value]) => ({ key, value }))
+/** Keys with a positive metric value, largest first (stable for ties). */
+function rankKeys(map: Map<string, Totals>, metric: keyof Totals): Array<{ key: string; value: number }> {
+	return [...map.entries()]
+		.map(([key, totals]) => ({ key, value: totals[metric] }))
+		.filter((row) => row.value > 0)
 		.sort((a, b) => b.value - a.value);
 }
 
-function choosePaletteFromLast30Days(range30: RangeAgg, topN = 4): {
-	modelColors: Map<ModelKey, RGB>;
-	otherColor: RGB;
-	orderedModels: ModelKey[];
-} {
+function choosePaletteFromLast30Days(range30: RangeAgg, view: "model" | "cwd", topN = 4): Palette {
 	// Prefer cost if any cost exists, else tokens, else messages, else sessions.
-	const costSum = [...range30.modelCost.values()].reduce((a, b) => a + b, 0);
-	const popularity =
-		costSum > 0
-			? range30.modelCost
-			: range30.totalTokens > 0
-				? range30.modelTokens
-				: range30.totalMessages > 0
-					? range30.modelMessages
-					: range30.modelSessions;
-
-	const sorted = sortMapByValueDesc(popularity);
-	const orderedModels = sorted.slice(0, topN).map((x) => x.key);
-	const modelColors = new Map<ModelKey, RGB>();
-	for (let i = 0; i < orderedModels.length; i++) {
-		modelColors.set(orderedModels[i], PALETTE[i % PALETTE.length]);
-	}
-	return {
-		modelColors,
-		otherColor: { r: 160, g: 160, b: 160 },
-		orderedModels,
-	};
+	const map = range30.by[view];
+	const costSum = [...map.values()].reduce((sum, totals) => sum + totals.cost, 0);
+	const popularity: keyof Totals =
+		costSum > 0 ? "cost" : range30.total.tokens > 0 ? "tokens" : range30.total.messages > 0 ? "messages" : "sessions";
+	const ordered = rankKeys(map, popularity).slice(0, topN).map((x) => x.key);
+	return { colors: new Map(ordered.map((key, i) => [key, PALETTE[i % PALETTE.length]])), ordered };
 }
 
-function chooseCwdPaletteFromLast30Days(range30: RangeAgg, topN = 4): {
-	cwdColors: Map<CwdKey, RGB>;
-	otherColor: RGB;
-	orderedCwds: CwdKey[];
-} {
-	const costSum = [...range30.cwdCost.values()].reduce((a, b) => a + b, 0);
-	const popularity =
-		costSum > 0
-			? range30.cwdCost
-			: range30.totalTokens > 0
-				? range30.cwdTokens
-				: range30.totalMessages > 0
-					? range30.cwdMessages
-					: range30.cwdSessions;
-
-	const sorted = sortMapByValueDesc(popularity);
-	const orderedCwds = sorted.slice(0, topN).map((x) => x.key);
-	const cwdColors = new Map<CwdKey, RGB>();
-	for (let i = 0; i < orderedCwds.length; i++) {
-		cwdColors.set(orderedCwds[i], PALETTE[i % PALETTE.length]);
-	}
-	return {
-		cwdColors,
-		otherColor: { r: 160, g: 160, b: 160 },
-		orderedCwds,
-	};
+function fixedPalette(keys: string[], colors: RGB[]): Palette {
+	return { colors: new Map(keys.map((key, i) => [key, colors[i]])), ordered: [...keys] };
 }
 
-// Fixed palette for day-of-week: weekdays get cool tones, weekend gets warm
-const DOW_PALETTE: RGB[] = [
-	{ r: 47, g: 129, b: 247 },  // Mon – blue
-	{ r: 64, g: 196, b: 99 },   // Tue – green
-	{ r: 163, g: 113, b: 247 }, // Wed – purple
-	{ r: 47, g: 175, b: 200 },  // Thu – teal
-	{ r: 100, g: 200, b: 150 }, // Fri – mint
-	{ r: 255, g: 159, b: 10 },  // Sat – orange
-	{ r: 244, g: 67, b: 54 },   // Sun – red
-];
+function dayMixedColor(day: DayAgg, colorMap: Map<string, RGB>, mode: MeasurementMode, view: BreakdownView): RGB {
+	// For dow, each day IS a single dow – use the dow color directly
+	if (view === "dow") return colorMap.get(DOW_NAMES[mondayIndex(day.date)]) ?? OTHER_COLOR;
 
-function buildDowPalette(): { dowColors: Map<DowKey, RGB>; orderedDows: DowKey[] } {
-	const dowColors = new Map<DowKey, RGB>();
-	for (let i = 0; i < DOW_NAMES.length; i++) {
-		dowColors.set(DOW_NAMES[i], DOW_PALETTE[i]);
-	}
-	return { dowColors, orderedDows: [...DOW_NAMES] };
-}
+	let metric: MeasurementMode = "sessions";
+	if (mode === "tokens") metric = day.total.tokens > 0 ? "tokens" : day.total.messages > 0 ? "messages" : "sessions";
+	else if (mode === "messages") metric = day.total.messages > 0 ? "messages" : "sessions";
 
-// Fixed palette for time-of-day buckets
-const TOD_PALETTE: Map<TodKey, RGB> = new Map([
-	["after-midnight", { r: 100, g: 60, b: 180 }],  // deep purple
-	["morning", { r: 255, g: 200, b: 50 }],          // golden yellow
-	["afternoon", { r: 64, g: 196, b: 99 }],         // green
-	["evening", { r: 47, g: 129, b: 247 }],           // blue
-	["night", { r: 60, g: 40, b: 140 }],              // dark indigo
-]);
-
-function buildTodPalette(): { todColors: Map<TodKey, RGB>; orderedTods: TodKey[] } {
-	const todColors = new Map<TodKey, RGB>();
-	const orderedTods: TodKey[] = [];
-	for (const b of TOD_BUCKETS) {
-		const c = TOD_PALETTE.get(b.key);
-		if (c) todColors.set(b.key, c);
-		orderedTods.push(b.key);
-	}
-	return { todColors, orderedTods };
-}
-
-function dayMixedColor(
-	day: DayAgg,
-	colorMap: Map<string, RGB>,
-	otherColor: RGB,
-	mode: MeasurementMode,
-	view: BreakdownView = "model",
-): RGB {
 	const parts: Array<{ color: RGB; weight: number }> = [];
 	let otherWeight = 0;
-
-	let map: Map<string, number>;
-	if (view === "dow") {
-		// For dow, each day IS a single dow – use the dow color directly
-		const dowKey = DOW_NAMES[mondayIndex(day.date)];
-		const c = colorMap.get(dowKey);
-		return c ?? otherColor;
-	} else if (view === "tod") {
-		if (mode === "tokens") {
-			map = day.tokens > 0 ? day.tokensByTod : day.messages > 0 ? day.messagesByTod : day.sessionsByTod;
-		} else if (mode === "messages") {
-			map = day.messages > 0 ? day.messagesByTod : day.sessionsByTod;
-		} else {
-			map = day.sessionsByTod;
-		}
-	} else if (view === "cwd") {
-		if (mode === "tokens") {
-			map = day.tokens > 0 ? day.tokensByCwd : day.messages > 0 ? day.messagesByCwd : day.sessionsByCwd;
-		} else if (mode === "messages") {
-			map = day.messages > 0 ? day.messagesByCwd : day.sessionsByCwd;
-		} else {
-			map = day.sessionsByCwd;
-		}
-	} else {
-		if (mode === "tokens") {
-			map = day.tokens > 0 ? day.tokensByModel : day.messages > 0 ? day.messagesByModel : day.sessionsByModel;
-		} else if (mode === "messages") {
-			map = day.messages > 0 ? day.messagesByModel : day.sessionsByModel;
-		} else {
-			map = day.sessionsByModel;
-		}
+	for (const [key, totals] of day.by[view].entries()) {
+		const c = colorMap.get(key);
+		if (c) parts.push({ color: c, weight: totals[metric] });
+		else otherWeight += totals[metric];
 	}
-
-	for (const [mk, w] of map.entries()) {
-		const c = colorMap.get(mk);
-		if (c) parts.push({ color: c, weight: w });
-		else otherWeight += w;
-	}
-	if (otherWeight > 0) parts.push({ color: otherColor, weight: otherWeight });
+	if (otherWeight > 0) parts.push({ color: OTHER_COLOR, weight: otherWeight });
 	return weightedMix(parts);
 }
 
-function graphMetricForRange(
-	range: RangeAgg,
-	mode: MeasurementMode,
-): { kind: "sessions" | "messages" | "tokens"; max: number; denom: number } {
-	if (mode === "tokens") {
-		const maxTokens = Math.max(0, ...range.days.map((d) => d.tokens));
-		if (maxTokens > 0) return { kind: "tokens", max: maxTokens, denom: Math.log1p(maxTokens) };
-		// fall back if tokens aren't available
-		mode = "messages";
+function graphMetricForRange(range: RangeAgg, mode: MeasurementMode): { kind: MeasurementMode; denom: number } {
+	// Fall back to a coarser metric when the requested one has no data.
+	const order: MeasurementMode[] = mode === "tokens" ? ["tokens", "messages"] : mode === "messages" ? ["messages"] : [];
+	for (const kind of order) {
+		const max = Math.max(0, ...range.days.map((d) => d.total[kind]));
+		if (max > 0) return { kind, denom: Math.log1p(max) };
 	}
-
-	if (mode === "messages") {
-		const maxMessages = Math.max(0, ...range.days.map((d) => d.messages));
-		if (maxMessages > 0) return { kind: "messages", max: maxMessages, denom: Math.log1p(maxMessages) };
-		// fall back if messages aren't available
-		mode = "sessions";
-	}
-
-	const maxSessions = Math.max(0, ...range.days.map((d) => d.sessions));
-	return { kind: "sessions", max: maxSessions, denom: Math.log1p(maxSessions) };
+	return { kind: "sessions", denom: Math.log1p(Math.max(0, ...range.days.map((d) => d.total.sessions))) };
 }
 
-function weeksForRange(range: RangeAgg): number {
-	const days = range.days;
-	const start = days[0].date;
-	const end = days[days.length - 1].date;
+function calendarGrid(range: RangeAgg): { start: Date; end: Date; gridStart: Date; weeks: number } {
+	const start = range.days[0].date;
+	const end = range.days[range.days.length - 1].date;
 	const gridStart = addDaysLocal(start, -mondayIndex(start));
 	const gridEnd = addDaysLocal(end, 6 - mondayIndex(end));
-	const totalGridDays = countDaysInclusiveLocal(gridStart, gridEnd);
-	return Math.ceil(totalGridDays / 7);
+	return { start, end, gridStart, weeks: Math.ceil(countDaysInclusiveLocal(gridStart, gridEnd) / 7) };
 }
 
 function renderGraphLines(
 	range: RangeAgg,
 	colorMap: Map<string, RGB>,
-	otherColor: RGB,
 	mode: MeasurementMode,
-	options?: { cellWidth?: number; gap?: number },
-	view: BreakdownView = "model",
+	options: { cellWidth: number; gap: number },
+	view: BreakdownView,
 ): string[] {
-	const days = range.days;
-	const start = days[0].date;
-	const end = days[days.length - 1].date;
-
-	const gridStart = addDaysLocal(start, -mondayIndex(start));
-	const gridEnd = addDaysLocal(end, 6 - mondayIndex(end));
-	const totalGridDays = countDaysInclusiveLocal(gridStart, gridEnd);
-	const weeks = Math.ceil(totalGridDays / 7);
-
-	const cellWidth = Math.max(1, Math.floor(options?.cellWidth ?? 1));
-	const gap = Math.max(0, Math.floor(options?.gap ?? 1));
+	const { start, end, gridStart, weeks } = calendarGrid(range);
+	const cellWidth = Math.max(1, Math.floor(options.cellWidth));
+	const gap = Math.max(0, Math.floor(options.gap));
 	const block = "█".repeat(cellWidth);
 	const gapStr = " ".repeat(gap);
-
 	const metric = graphMetricForRange(range, mode);
-	const denom = metric.denom;
 
 	// Label only Mon/Wed/Fri like GitHub (saves space)
 	const labelByRow = new Map<number, string>([
@@ -885,33 +585,23 @@ function renderGraphLines(
 
 		for (let w = 0; w < weeks; w++) {
 			const cellDate = addDaysLocal(gridStart, w * 7 + row);
-			const inRange = cellDate >= start && cellDate <= end;
 			const colGap = w < weeks - 1 ? gapStr : "";
-			if (!inRange) {
+			if (cellDate < start || cellDate > end) {
 				line += " ".repeat(cellWidth) + colGap;
 				continue;
 			}
 
-			const key = toLocalDayKey(cellDate);
-			const day = range.dayByKey.get(key);
-			const value =
-				metric.kind === "tokens"
-					? (day?.tokens ?? 0)
-					: metric.kind === "messages"
-						? (day?.messages ?? 0)
-						: (day?.sessions ?? 0);
-
+			const day = range.dayByKey.get(toLocalDayKey(cellDate));
+			const value = day?.total[metric.kind] ?? 0;
 			if (!day || value <= 0) {
 				line += ansiFg(EMPTY_CELL_BG, block) + colGap;
 				continue;
 			}
 
-			const hue = dayMixedColor(day, colorMap, otherColor, mode, view);
-			let t = denom > 0 ? Math.log1p(value) / denom : 0;
-			t = clamp01(t);
+			const hue = dayMixedColor(day, colorMap, mode, view);
+			const t = clamp01(metric.denom > 0 ? Math.log1p(value) / metric.denom : 0);
 			const minVisible = 0.2;
-			const intensity = minVisible + (1 - minVisible) * t;
-			const rgb = mixRgb(DEFAULT_BG, hue, intensity);
+			const rgb = mixRgb(DEFAULT_BG, hue, minVisible + (1 - minVisible) * t);
 			line += ansiFg(rgb, block) + colGap;
 		}
 
@@ -926,223 +616,71 @@ function displayModelName(modelKey: string): string {
 	return idx === -1 ? modelKey : modelKey.slice(idx + 1);
 }
 
-function renderModelTable(range: RangeAgg, mode: MeasurementMode, maxRows = 8): string[] {
-	// Keep this relatively narrow: model + selected metric + cost + share.
-	const metric = graphMetricForRange(range, mode);
-	const kind = metric.kind;
+const TABLES: Record<BreakdownView, { header: string; maxWidth: number; label: (key: string) => string; fixed?: string[]; empty?: string }> = {
+	model: { header: "model", maxWidth: 52, label: (key) => key, empty: "(no model data found)" },
+	cwd: { header: "directory", maxWidth: 42, label: (key) => abbreviatePath(key, 40), empty: "(no directory data found)" },
+	dow: { header: "day", maxWidth: 5, label: (key) => key, fixed: DOW_NAMES },
+	tod: { header: "time of day", maxWidth: 22, label: todBucketLabel, fixed: TOD_BUCKETS.map((b) => b.key) },
+};
 
-	let perModel: Map<ModelKey, number>;
-	let total = 0;
-	let label = kind;
-
-	if (kind === "tokens") {
-		perModel = range.modelTokens;
-		total = range.totalTokens;
-	} else if (kind === "messages") {
-		perModel = range.modelMessages;
-		total = range.totalMessages;
-	} else {
-		perModel = range.modelSessions;
-		total = range.sessions;
-	}
-
-	const sorted = sortMapByValueDesc(perModel);
-	const rows = sorted.slice(0, maxRows);
-
+function renderTable(range: RangeAgg, kind: MeasurementMode, view: BreakdownView, maxRows = 8): string[] {
+	const table = TABLES[view];
+	const map = range.by[view];
+	// Weekday and time-of-day tables always show every bucket in calendar order.
+	const keys = table.fixed ?? rankKeys(map, kind).slice(0, maxRows).map((row) => row.key);
+	const labels = keys.map(table.label);
+	const total = range.total[kind];
 	const valueWidth = kind === "tokens" ? 10 : 8;
-	const modelWidth = Math.min(52, Math.max("model".length, ...rows.map((r) => r.key.length)));
+	const keyWidth = table.fixed ? table.maxWidth : Math.min(table.maxWidth, Math.max(table.header.length, ...labels.map((l) => l.length)));
 
 	const lines: string[] = [];
-	lines.push(`${padRight("model", modelWidth)}  ${padLeft(label, valueWidth)}  ${padLeft("cost", 10)}  ${padLeft("share", 6)}`);
-	lines.push(`${"-".repeat(modelWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(6)}`);
-
-	for (const r of rows) {
-		const value = perModel.get(r.key) ?? 0;
-		const cost = range.modelCost.get(r.key) ?? 0;
+	lines.push(`${padRight(table.header, keyWidth)}  ${padLeft(kind, valueWidth)}  ${padLeft("cost", 10)}  ${padLeft("share", 6)}`);
+	lines.push(`${"-".repeat(keyWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(6)}`);
+	keys.forEach((key, i) => {
+		const totals = map.get(key) ?? emptyTotals();
+		const value = totals[kind];
 		const share = total > 0 ? `${Math.round((value / total) * 100)}%` : "0%";
 		lines.push(
-			`${padRight(r.key.slice(0, modelWidth), modelWidth)}  ${padLeft(formatCount(value), valueWidth)}  ${padLeft(formatUsd(cost), 10)}  ${padLeft(share, 6)}`,
+			`${padRight(labels[i].slice(0, keyWidth), keyWidth)}  ${padLeft(formatCount(value), valueWidth)}  ${padLeft(formatUsd(totals.cost), 10)}  ${padLeft(share, 6)}`,
 		);
-	}
-
-	if (sorted.length === 0) {
-		lines.push(dim("(no model data found)"));
-	}
-
+	});
+	if (keys.length === 0 && table.empty) lines.push(dim(table.empty));
 	return lines;
 }
 
-function renderCwdTable(range: RangeAgg, mode: MeasurementMode, maxRows = 8): string[] {
-	const metric = graphMetricForRange(range, mode);
-	const kind = metric.kind;
-
-	let perCwd: Map<CwdKey, number>;
-	let total = 0;
-	let label = kind;
-
-	if (kind === "tokens") {
-		perCwd = range.cwdTokens;
-		total = range.totalTokens;
-	} else if (kind === "messages") {
-		perCwd = range.cwdMessages;
-		total = range.totalMessages;
-	} else {
-		perCwd = range.cwdSessions;
-		total = range.sessions;
-	}
-
-	const sorted = sortMapByValueDesc(perCwd);
-	const rows = sorted.slice(0, maxRows);
-
-	const valueWidth = kind === "tokens" ? 10 : 8;
-	const displayPaths = rows.map((r) => abbreviatePath(r.key, 40));
-	const cwdWidth = Math.min(42, Math.max("directory".length, ...displayPaths.map((p) => p.length)));
-
-	const lines: string[] = [];
-	lines.push(`${padRight("directory", cwdWidth)}  ${padLeft(label, valueWidth)}  ${padLeft("cost", 10)}  ${padLeft("share", 6)}`);
-	lines.push(`${"-".repeat(cwdWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(6)}`);
-
-	for (let i = 0; i < rows.length; i++) {
-		const r = rows[i];
-		const value = perCwd.get(r.key) ?? 0;
-		const cost = range.cwdCost.get(r.key) ?? 0;
-		const share = total > 0 ? `${Math.round((value / total) * 100)}%` : "0%";
-		lines.push(
-			`${padRight(displayPaths[i].slice(0, cwdWidth), cwdWidth)}  ${padLeft(formatCount(value), valueWidth)}  ${padLeft(formatUsd(cost), 10)}  ${padLeft(share, 6)}`,
-		);
-	}
-
-	if (sorted.length === 0) {
-		lines.push(dim("(no directory data found)"));
-	}
-
-	return lines;
-}
-
-function dowMetricForRange(
-	range: RangeAgg,
-	mode: MeasurementMode,
-): { kind: "sessions" | "messages" | "tokens"; perDow: Map<DowKey, number>; total: number } {
-	const metric = graphMetricForRange(range, mode);
-	const kind = metric.kind;
-
-	if (kind === "tokens") {
-		return { kind, perDow: range.dowTokens, total: range.totalTokens };
-	}
-	if (kind === "messages") {
-		return { kind, perDow: range.dowMessages, total: range.totalMessages };
-	}
-	return { kind, perDow: range.dowSessions, total: range.sessions };
-}
-
-function renderDowDistributionLines(
-	range: RangeAgg,
-	mode: MeasurementMode,
-	dowColors: Map<DowKey, RGB>,
-	width: number,
-): string[] {
-	const { kind, perDow, total } = dowMetricForRange(range, mode);
+function renderDowDistributionLines(range: RangeAgg, mode: MeasurementMode, dowColors: Map<string, RGB>, width: number): string[] {
+	const kind = graphMetricForRange(range, mode).kind;
+	const total = range.total[kind];
 	const dayWidth = 3;
 	const pctWidth = 4; // "100%"
 	const valueWidth = kind === "tokens" ? 10 : 8;
 	const showValue = width >= dayWidth + 1 + 10 + 1 + pctWidth + 1 + valueWidth;
 	const fixedWidth = dayWidth + 1 + 1 + pctWidth + (showValue ? 1 + valueWidth : 0);
 	const barWidth = Math.max(1, width - fixedWidth);
-	const fallbackColor: RGB = { r: 160, g: 160, b: 160 };
 
-	const lines: string[] = [];
-	for (const dow of DOW_NAMES) {
-		const value = perDow.get(dow) ?? 0;
+	return DOW_NAMES.map((dow) => {
+		const value = range.by.dow.get(dow)?.[kind] ?? 0;
 		const share = total > 0 ? value / total : 0;
-		let filled = share > 0 ? Math.round(share * barWidth) : 0;
-		if (share > 0) filled = Math.max(1, filled);
-		filled = Math.min(barWidth, filled);
+		const filled = share > 0 ? Math.min(barWidth, Math.max(1, Math.round(share * barWidth))) : 0;
 		const empty = Math.max(0, barWidth - filled);
 
-		const color = dowColors.get(dow) ?? fallbackColor;
-		const filledBar = filled > 0 ? ansiFg(color, "█".repeat(filled)) : "";
+		const filledBar = filled > 0 ? ansiFg(dowColors.get(dow) ?? OTHER_COLOR, "█".repeat(filled)) : "";
 		const emptyBar = empty > 0 ? ansiFg(EMPTY_CELL_BG, "█".repeat(empty)) : "";
 		const pct = padLeft(`${Math.round(share * 100)}%`, pctWidth);
 
 		let line = `${padRight(dow, dayWidth)} ${filledBar}${emptyBar} ${pct}`;
 		if (showValue) line += ` ${padLeft(formatCount(value), valueWidth)}`;
-		lines.push(line);
-	}
-
-	return lines;
-}
-
-function renderDowTable(range: RangeAgg, mode: MeasurementMode): string[] {
-	const { kind, perDow, total } = dowMetricForRange(range, mode);
-	const valueWidth = kind === "tokens" ? 10 : 8;
-	const dowWidth = 5; // "day  "
-
-	const lines: string[] = [];
-	lines.push(`${padRight("day", dowWidth)}  ${padLeft(kind, valueWidth)}  ${padLeft("cost", 10)}  ${padLeft("share", 6)}`);
-	lines.push(`${"-".repeat(dowWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(6)}`);
-
-	// Always show in Mon–Sun order
-	for (const dow of DOW_NAMES) {
-		const value = perDow.get(dow) ?? 0;
-		const cost = range.dowCost.get(dow) ?? 0;
-		const share = total > 0 ? `${Math.round((value / total) * 100)}%` : "0%";
-		lines.push(
-			`${padRight(dow, dowWidth)}  ${padLeft(formatCount(value), valueWidth)}  ${padLeft(formatUsd(cost), 10)}  ${padLeft(share, 6)}`,
-		);
-	}
-
-	return lines;
-}
-
-function renderTodTable(range: RangeAgg, mode: MeasurementMode): string[] {
-	const metric = graphMetricForRange(range, mode);
-	const kind = metric.kind;
-
-	let perTod: Map<TodKey, number>;
-	let total = 0;
-
-	if (kind === "tokens") {
-		perTod = range.todTokens;
-		total = range.totalTokens;
-	} else if (kind === "messages") {
-		perTod = range.todMessages;
-		total = range.totalMessages;
-	} else {
-		perTod = range.todSessions;
-		total = range.sessions;
-	}
-
-	const valueWidth = kind === "tokens" ? 10 : 8;
-	const todWidth = 22; // widest label
-
-	const lines: string[] = [];
-	lines.push(`${padRight("time of day", todWidth)}  ${padLeft(kind, valueWidth)}  ${padLeft("cost", 10)}  ${padLeft("share", 6)}`);
-	lines.push(`${"-".repeat(todWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(6)}`);
-
-	// Always show in chronological order
-	for (const b of TOD_BUCKETS) {
-		const value = perTod.get(b.key) ?? 0;
-		const cost = range.todCost.get(b.key) ?? 0;
-		const share = total > 0 ? `${Math.round((value / total) * 100)}%` : "0%";
-		lines.push(
-			`${padRight(b.label, todWidth)}  ${padLeft(formatCount(value), valueWidth)}  ${padLeft(formatUsd(cost), 10)}  ${padLeft(share, 6)}`,
-		);
-	}
-
-	return lines;
+		return line;
+	});
 }
 
 function rangeSummary(range: RangeAgg, days: number, mode: MeasurementMode): string {
-	const avg = range.sessions > 0 ? range.totalCost / range.sessions : 0;
-	const costPart = range.totalCost > 0 ? `${formatUsd(range.totalCost)} · avg ${formatUsd(avg)}/session` : `$0.0000`;
-
-	if (mode === "tokens") {
-		return `Last ${days} days: ${formatCount(range.sessions)} sessions · ${formatCount(range.totalTokens)} tokens · ${costPart}`;
-	}
-	if (mode === "messages") {
-		return `Last ${days} days: ${formatCount(range.sessions)} sessions · ${formatCount(range.totalMessages)} messages · ${costPart}`;
-	}
-	return `Last ${days} days: ${formatCount(range.sessions)} sessions · ${costPart}`;
+	const { sessions, messages, tokens, cost } = range.total;
+	const avg = sessions > 0 ? cost / sessions : 0;
+	const costPart = cost > 0 ? `${formatUsd(cost)} · avg ${formatUsd(avg)}/session` : `$0.0000`;
+	const metricPart =
+		mode === "tokens" ? ` · ${formatCount(tokens)} tokens` : mode === "messages" ? ` · ${formatCount(messages)} messages` : "";
+	return `Last ${days} days: ${formatCount(sessions)} sessions${metricPart} · ${costPart}`;
 }
 
 async function computeBreakdown(
@@ -1152,8 +690,7 @@ async function computeBreakdown(
 	const now = new Date();
 	const ranges = new Map<number, RangeAgg>();
 	for (const d of RANGE_DAYS) ranges.set(d, buildRangeAgg(d, now));
-	const range90 = ranges.get(90)!;
-	const start90 = range90.days[0].date;
+	const start90 = ranges.get(90)!.days[0].date;
 
 	onProgress?.({ phase: "scan", foundFiles: 0, parsedFiles: 0, totalFiles: 0, currentFile: undefined });
 
@@ -1181,24 +718,33 @@ async function computeBreakdown(
 
 		const session = await parseSessionFile(filePath, signal);
 		if (!session) continue;
-
-		const sessionDay = localMidnight(session.startedAt);
-		for (const d of RANGE_DAYS) {
-			const range = ranges.get(d)!;
-			const start = range.days[0].date;
-			const end = range.days[range.days.length - 1].date;
-			if (sessionDay < start || sessionDay > end) continue;
-			addSessionToRange(range, session);
-		}
+		// Each range ignores sessions outside its own days.
+		for (const range of ranges.values()) addSessionToRange(range, session);
 	}
 
 	onProgress?.({ phase: "finalize", currentFile: undefined });
 
-	const palette = choosePaletteFromLast30Days(ranges.get(30)!, 4);
-	const cwdPalette = chooseCwdPaletteFromLast30Days(ranges.get(30)!, 4);
-	const dowPalette = buildDowPalette();
-	const todPalette = buildTodPalette();
-	return { generatedAt: now, ranges, palette, cwdPalette, dowPalette, todPalette };
+	const range30 = ranges.get(30)!;
+	const palettes: Record<BreakdownView, Palette> = {
+		model: choosePaletteFromLast30Days(range30, "model"),
+		cwd: choosePaletteFromLast30Days(range30, "cwd"),
+		dow: fixedPalette(DOW_NAMES, DOW_PALETTE),
+		tod: fixedPalette(TOD_BUCKETS.map((b) => b.key), TOD_PALETTE),
+	};
+	return { generatedAt: now, ranges, palettes };
+}
+
+const LEGEND_TITLES: Record<BreakdownView, string> = {
+	model: "Top models (30d palette):",
+	cwd: "Top directories (30d palette):",
+	dow: "Time of day:",
+	tod: "Time of day:",
+};
+
+function legendLabel(view: BreakdownView, key: string): string {
+	if (view === "model") return displayModelName(key);
+	if (view === "cwd") return abbreviatePath(key, 30);
+	return view === "tod" ? todBucketLabel(key) : key;
 }
 
 class BreakdownComponent implements Component {
@@ -1223,60 +769,31 @@ class BreakdownComponent implements Component {
 	}
 
 	handleInput(data: string): void {
-		if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c")) || data.toLowerCase() === "q") {
+		const key = data.toLowerCase();
+		if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c")) || key === "q") {
 			this.onDone();
 			return;
 		}
 
-		if (matchesKey(data, Key.tab) || matchesKey(data, Key.shift("tab")) || data.toLowerCase() === "t") {
+		const cycle = <T,>(items: readonly T[], current: T, dir: number): T =>
+			items[(Math.max(0, items.indexOf(current)) + items.length + dir) % items.length];
+
+		if (matchesKey(data, Key.tab) || matchesKey(data, Key.shift("tab")) || key === "t") {
 			const order: MeasurementMode[] = ["sessions", "messages", "tokens"];
-			const idx = Math.max(0, order.indexOf(this.measurement));
-			const dir = matchesKey(data, Key.shift("tab")) ? -1 : 1;
-			this.measurement = order[(idx + order.length + dir) % order.length] ?? "sessions";
-			this.invalidate();
-			this.tui.requestRender();
-			return;
-		}
-
-		const prev = () => {
+			this.measurement = cycle(order, this.measurement, matchesKey(data, Key.shift("tab")) ? -1 : 1);
+		} else if (matchesKey(data, Key.left) || key === "h") {
 			this.rangeIndex = (this.rangeIndex + RANGE_DAYS.length - 1) % RANGE_DAYS.length;
-			this.invalidate();
-			this.tui.requestRender();
-		};
-		const next = () => {
+		} else if (matchesKey(data, Key.right) || key === "l") {
 			this.rangeIndex = (this.rangeIndex + 1) % RANGE_DAYS.length;
-			this.invalidate();
-			this.tui.requestRender();
-		};
-
-		if (matchesKey(data, Key.left) || data.toLowerCase() === "h") prev();
-		if (matchesKey(data, Key.right) || data.toLowerCase() === "l") next();
-
-		if (matchesKey(data, Key.up) || matchesKey(data, Key.down) || data.toLowerCase() === "j" || data.toLowerCase() === "k") {
-			const views: BreakdownView[] = ["model", "cwd", "dow", "tod"];
-			const idx = views.indexOf(this.view);
-			const dir = matchesKey(data, Key.up) || data.toLowerCase() === "k" ? -1 : 1;
-			this.view = views[(idx + views.length + dir) % views.length] ?? "model";
-			this.invalidate();
-			this.tui.requestRender();
+		} else if (matchesKey(data, Key.up) || matchesKey(data, Key.down) || key === "j" || key === "k") {
+			this.view = cycle(VIEWS, this.view, matchesKey(data, Key.up) || key === "k" ? -1 : 1);
+		} else if (["1", "2", "3"].includes(data)) {
+			this.rangeIndex = Number(data) - 1;
+		} else {
 			return;
 		}
-
-		if (data === "1") {
-			this.rangeIndex = 0;
-			this.invalidate();
-			this.tui.requestRender();
-		}
-		if (data === "2") {
-			this.rangeIndex = 1;
-			this.invalidate();
-			this.tui.requestRender();
-		}
-		if (data === "3") {
-			this.rangeIndex = 2;
-			this.invalidate();
-			this.tui.requestRender();
-		}
+		this.invalidate();
+		this.tui.requestRender();
 	}
 
 	render(width: number): string[] {
@@ -1285,72 +802,41 @@ class BreakdownComponent implements Component {
 		const selectedDays = RANGE_DAYS[this.rangeIndex];
 		const range = this.data.ranges.get(selectedDays)!;
 		const metric = graphMetricForRange(range, this.measurement);
+		const palette = this.data.palettes[this.view];
 
-		const tab = (days: number, idx: number): string => {
-			const selected = idx === this.rangeIndex;
-			const label = `${days}d`;
-			return selected ? bold(`[${label}]`) : dim(` ${label} `);
-		};
-
-		const metricTab = (mode: MeasurementMode, label: string): string => {
-			const selected = mode === this.measurement;
-			return selected ? bold(`[${label}]`) : dim(` ${label} `);
-		};
-
-		const viewTab = (v: BreakdownView, label: string): string => {
-			const selected = v === this.view;
-			return selected ? bold(`[${label}]`) : dim(` ${label} `);
-		};
-
+		const tab = (selected: boolean, label: string): string => (selected ? bold(`[${label}]`) : dim(` ${label} `));
 		const header =
-			`${bold("Session breakdown")}  ${tab(7, 0)}${tab(30, 1)}${tab(90, 2)}  ` +
-			`${metricTab("sessions", "sess")}${metricTab("messages", "msg")}${metricTab("tokens", "tok")}  ` +
-			`${viewTab("model", "model")}${viewTab("cwd", "cwd")}${viewTab("dow", "dow")}${viewTab("tod", "tod")}`;
+			`${bold("Session breakdown")}  ` +
+			RANGE_DAYS.map((days, idx) => tab(idx === this.rangeIndex, `${days}d`)).join("") +
+			"  " +
+			(
+				[
+					["sessions", "sess"],
+					["messages", "msg"],
+					["tokens", "tok"],
+				] as const
+			)
+				.map(([mode, label]) => tab(mode === this.measurement, label))
+				.join("") +
+			"  " +
+			VIEWS.map((view) => tab(view === this.view, view)).join("");
 
-		// Choose colors and legend based on current view
-		let activeColorMap: Map<string, RGB>;
-		let activeOtherColor: RGB = { r: 160, g: 160, b: 160 };
-		const legendItems: string[] = [];
-
-		if (this.view === "model") {
-			activeColorMap = this.data.palette.modelColors;
-			activeOtherColor = this.data.palette.otherColor;
-			for (const mk of this.data.palette.orderedModels) {
-				const c = activeColorMap.get(mk);
-				if (c) legendItems.push(`${ansiFg(c, "█")} ${displayModelName(mk)}`);
-			}
-			legendItems.push(`${ansiFg(activeOtherColor, "█")} other`);
-		} else if (this.view === "cwd") {
-			activeColorMap = this.data.cwdPalette.cwdColors;
-			activeOtherColor = this.data.cwdPalette.otherColor;
-			for (const cwd of this.data.cwdPalette.orderedCwds) {
-				const c = activeColorMap.get(cwd);
-				if (c) legendItems.push(`${ansiFg(c, "█")} ${abbreviatePath(cwd, 30)}`);
-			}
-			legendItems.push(`${ansiFg(activeOtherColor, "█")} other`);
-		} else if (this.view === "dow") {
-			activeColorMap = this.data.dowPalette.dowColors;
-			for (const dow of this.data.dowPalette.orderedDows) {
-				const c = activeColorMap.get(dow);
-				if (c) legendItems.push(`${ansiFg(c, "█")} ${dow}`);
-			}
-		} else {
-			activeColorMap = this.data.todPalette.todColors;
-			for (const tod of this.data.todPalette.orderedTods) {
-				const c = activeColorMap.get(tod);
-				if (c) legendItems.push(`${ansiFg(c, "█")} ${todBucketLabel(tod)}`);
-			}
-		}
+		// Legend for the current view; model and directory views also show an "other" bucket.
+		const legendItems = palette.ordered.flatMap((key) => {
+			const c = palette.colors.get(key);
+			return c ? [`${ansiFg(c, "█")} ${legendLabel(this.view, key)}`] : [];
+		});
+		if (this.view === "model" || this.view === "cwd") legendItems.push(`${ansiFg(OTHER_COLOR, "█")} other`);
 
 		const graphDescriptor = this.view === "dow" ? `share of ${metric.kind} by weekday` : `${metric.kind}/day`;
 		const summary = rangeSummary(range, selectedDays, metric.kind) + dim(`   (graph: ${graphDescriptor})`);
 
 		let graphLines: string[];
 		if (this.view === "dow") {
-			graphLines = renderDowDistributionLines(range, this.measurement, this.data.dowPalette.dowColors, width);
+			graphLines = renderDowDistributionLines(range, this.measurement, palette.colors, width);
 		} else {
 			const maxScale = selectedDays === 7 ? 4 : selectedDays === 30 ? 3 : 2;
-			const weeks = weeksForRange(range);
+			const weeks = calendarGrid(range).weeks;
 			const leftMargin = 4; // "Mon " (or 4 spaces)
 			const gap = 1;
 			const graphArea = Math.max(1, width - leftMargin);
@@ -1358,20 +844,9 @@ class BreakdownComponent implements Component {
 			const idealCellWidth = Math.floor((graphArea + gap) / Math.max(1, weeks)) - gap;
 			const cellWidth = Math.min(maxScale, Math.max(1, idealCellWidth));
 
-			graphLines = renderGraphLines(
-				range,
-				activeColorMap,
-				activeOtherColor,
-				this.measurement,
-				{ cellWidth, gap },
-				this.view,
-			);
+			graphLines = renderGraphLines(range, palette.colors, this.measurement, { cellWidth, gap }, this.view);
 		}
-		const tableLines =
-			this.view === "model" ? renderModelTable(range, metric.kind, 8)
-			: this.view === "cwd" ? renderCwdTable(range, metric.kind, 8)
-			: this.view === "dow" ? renderDowTable(range, metric.kind)
-			: renderTodTable(range, metric.kind);
+		const tableLines = renderTable(range, metric.kind, this.view);
 
 		const lines: string[] = [];
 		lines.push(truncateToWidth(header, width));
@@ -1387,16 +862,10 @@ class BreakdownComponent implements Component {
 			const graphWidth = Math.max(0, ...graphLines.map((l) => visibleWidth(l)));
 			const sep = 2;
 			const legendWidth = width - graphWidth - sep;
-			const showSideLegend = legendWidth >= 22;
+			const legendTitle = dim(LEGEND_TITLES[this.view]);
 
-			if (showSideLegend) {
-				const legendBlock: string[] = [];
-				const legendTitle =
-					this.view === "model" ? "Top models (30d palette):"
-					: this.view === "cwd" ? "Top directories (30d palette):"
-					: "Time of day:";
-				legendBlock.push(dim(legendTitle));
-				legendBlock.push(...legendItems);
+			if (legendWidth >= 22) {
+				const legendBlock = [legendTitle, ...legendItems];
 				// Fit into 7 rows (same as graph). If too many, show a final "+N more" line.
 				const maxLegendRows = graphLines.length;
 				let legendLines = legendBlock.slice(0, maxLegendRows);
@@ -1404,28 +873,17 @@ class BreakdownComponent implements Component {
 					const remaining = legendBlock.length - (maxLegendRows - 1);
 					legendLines = [...legendBlock.slice(0, maxLegendRows - 1), dim(`+${remaining} more`)];
 				}
-				while (legendLines.length < graphLines.length) legendLines.push("");
-
-				const padRightAnsi = (s: string, target: number): string => {
-					const w = visibleWidth(s);
-					return w >= target ? s : s + " ".repeat(target - w);
-				};
 
 				for (let i = 0; i < graphLines.length; i++) {
-					const left = padRightAnsi(graphLines[i] ?? "", graphWidth);
+					const left = graphLines[i] + " ".repeat(Math.max(0, graphWidth - visibleWidth(graphLines[i])));
 					const right = truncateToWidth(legendLines[i] ?? "", Math.max(0, legendWidth));
 					lines.push(truncateToWidth(left + " ".repeat(sep) + right, width));
 				}
 			} else {
-				// Fallback: graph only (legend will be shown below).
+				// Fallback: graph only, then a compact legend below.
 				for (const gl of graphLines) lines.push(truncateToWidth(gl, width));
 				lines.push("");
-				// Compact legend below, left-aligned.
-				const legendTitleBelow =
-					this.view === "model" ? "Top models (30d palette):"
-					: this.view === "cwd" ? "Top directories (30d palette):"
-					: "Time of day:";
-				lines.push(truncateToWidth(dim(legendTitleBelow), width));
+				lines.push(truncateToWidth(legendTitle, width));
 				for (const it of legendItems) lines.push(truncateToWidth(it, width));
 			}
 		}
@@ -1433,7 +891,6 @@ class BreakdownComponent implements Component {
 		lines.push("");
 		for (const tl of tableLines) lines.push(truncateToWidth(tl, width));
 
-		// Ensure no overly long lines (truncateToWidth already), but keep at least 1 line.
 		this.cachedWidth = width;
 		this.cachedLines = lines.map((l) => (visibleWidth(l) > width ? truncateToWidth(l, width) : l));
 		return this.cachedLines;
@@ -1484,33 +941,23 @@ export default function sessionBreakdownExtension(pi: ExtensionAPI) {
 					return `${baseMessage}  finalizing · ${elapsed}s`;
 				};
 
-				let intervalId: NodeJS.Timeout | null = null;
-				const stopTicker = () => {
-					if (intervalId) {
-						clearInterval(intervalId);
-						intervalId = null;
-					}
-				};
-
 				// Update every 0.5s so long-running scans show some visible progress.
 				setBorderedLoaderMessage(loader, renderMessage());
-				intervalId = setInterval(() => {
-					setBorderedLoaderMessage(loader, renderMessage());
-				}, 500);
+				const intervalId = setInterval(() => setBorderedLoaderMessage(loader, renderMessage()), 500);
 
 				loader.onAbort = () => {
 					aborted = true;
-					stopTicker();
+					clearInterval(intervalId);
 					done(null);
 				};
 
 				computeBreakdown(loader.signal, (update) => Object.assign(progress, update))
 					.then((d) => {
-						stopTicker();
+						clearInterval(intervalId);
 						if (!aborted) done(d);
 					})
 					.catch((err) => {
-						stopTicker();
+						clearInterval(intervalId);
 						console.error("session-breakdown: failed to analyze sessions", err);
 						if (!aborted) done(null);
 					});

@@ -10,7 +10,7 @@ const ALLOWED_FIELDS = new Set([
   "allowed-tools", "disable-model-invocation",
 ]);
 const EXPECTED = {
-  workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "prototype", "research", "survey", "verify"],
+  workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "prototype", "research", "survey", "verify", "wait-what"],
   maintenance: ["agents-md", "project-memory", "session-close", "skill-audit", "write-skill"],
   domain: ["apple-interface", "chatgpt-export", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
@@ -45,7 +45,7 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 29);
+  assert.equal(skillFiles().length, 30);
 });
 
 test("README documents the exact approved skill fleet", () => {
@@ -93,46 +93,63 @@ test("skill reference Markdown relative links resolve", () => {
   }
 });
 
-test("only approved side-effecting or workspace skills require explicit invocation", () => {
+test("only approved user-invoked skills disable automatic selection", () => {
   const explicit = skillFiles().flatMap((file) => {
     const text = fs.readFileSync(file, "utf8");
     return /\ndisable-model-invocation:\s*true\s*(?:\n|$)/.test(text)
       ? [path.basename(path.dirname(file))]
       : [];
   }).sort();
-  assert.deepEqual(explicit, ["agents-md", "teach"]);
+  assert.deepEqual(explicit, ["agents-md", "teach", "wait-what"]);
 });
 
+// Structural contracts and a few safety boundaries. Exact prose is deliberately
+// not pinned: wording should stay free to get plainer. None of this proves that a
+// model follows the guidance.
+const read = (relative) => fs.readFileSync(path.join(skillsDir, relative), "utf8");
+
 test("agents-md stays user-triggered and owns only AGENTS.md", () => {
-  const text = fs.readFileSync(path.join(skillsDir, "maintenance", "agents-md", "SKILL.md"), "utf8");
+  const text = read("maintenance/agents-md/SKILL.md");
   assert.match(text, /disable-model-invocation:\s*true/);
-  assert.match(text, /description: "When the user explicitly asks/);
-  assert.match(text, /smallest useful always-loaded map/);
-  const inspect = text.indexOf("Inspect the path type and content of `AGENTS.md`");
-  const approve = text.indexOf("Present the proposed keep, move, and remove set and get approval");
-  assert.ok(inspect >= 0 && inspect < approve);
   assert.match(text, /never write through a symlink/);
-  assert.match(text, /untracked, ignored, staged, or unstaged regular file/);
-  assert.match(text, /adjacent `<name>\.bak`/);
+  assert.match(text, /\.bak/);
   assert.doesNotMatch(text, /CLAUDE\.md|@AGENTS\.md/);
-  assert.match(text, /Other instruction files are outside this skill's write scope/);
-  assert.match(text, /purpose, stable ownership boundaries/);
-  assert.match(text, /Each pointer says when to read its target and what it answers/);
-  assert.match(text, /growing, maintaining, updating, and fixing/);
-  assert.match(text, /not the author's harness layout/);
-  assert.match(text, /No mandatory glossary, tracker, memory tree or sibling skill installation/);
-  assert.match(text, /existing but irrelevant target is a broken pointer/);
 });
 
 test("upstream review is gated inside the existing audit skill", () => {
-  const auditDir = path.join(skillsDir, "maintenance", "skill-audit");
-  const audit = fs.readFileSync(path.join(auditDir, "SKILL.md"), "utf8");
-  assert.match(audit, /\[Upstream review\]\(references\/UPSTREAM_REVIEW\.md\)/);
-  assert.match(audit, /Ordinary audits stay local/);
-  const upstream = fs.readFileSync(path.join(auditDir, "references", "UPSTREAM_REVIEW.md"), "utf8");
+  assert.match(read("maintenance/skill-audit/SKILL.md"), /\[Upstream review\]\(references\/UPSTREAM_REVIEW\.md\)/);
+  const upstream = read("maintenance/skill-audit/references/UPSTREAM_REVIEW.md");
   assert.match(upstream, /approval before any harness or ledger edit/);
-  assert.match(upstream, /never execute fetched code/i);
   assert.doesNotMatch(upstream, /https?:\/\//);
+});
+
+test("whole-harness review and repeatable probes stay within the existing audit", () => {
+  const audit = read("maintenance/skill-audit/SKILL.md");
+  const harness = read("maintenance/skill-audit/references/HARNESS_REVIEW.md");
+  const upstream = read("maintenance/skill-audit/references/UPSTREAM_REVIEW.md");
+  for (const file of ["HARNESS_REVIEW.md", "BEHAVIOR_PROBES.md"]) {
+    assert.ok(audit.includes(`](references/${file})`), file);
+  }
+  for (const text of [harness, upstream]) assert.ok(text.includes("](BEHAVIOR_PROBES.md)"));
+  const probes = read("maintenance/skill-audit/references/BEHAVIOR_PROBES.md");
+  assert.match(harness, /latest stable \*\*Pi and Claude Code\*\*/);
+  const cases = [...probes.matchAll(/^\| ([MUVTW]\d+) —/gm)].map((match) => match[1]);
+  assert.deepEqual(cases, ["M1", "M2", "M3", "M4", "U1", "U2", "U3", "U4", "U5", "U6", "U7", "U8", "T1", "W1", "V1"]);
+});
+
+test("wait-what stays a small user-invoked conversation repair", () => {
+  const text = read("workflow/wait-what/SKILL.md");
+  assert.match(text, /no files, learning workspace or teaching mode unless requested/);
+  assert.doesNotMatch(text, /\]\([^)]+\.md\)/, "no required sibling or glossary dependency");
+});
+
+test("teach defaults to chat and gates persistent course output", () => {
+  const text = read("domain/teach/SKILL.md");
+  assert.match(text, /Default to teaching in chat, without files or workspace setup/);
+  assert.match(text, /permission to save a course before scaffolding/);
+  for (const file of ["MISSION-FORMAT.md", "RESOURCES-FORMAT.md", "LEARNING-RECORD-FORMAT.md", "GLOSSARY-FORMAT.md"]) {
+    assert.ok(text.includes(`](${file})`), file);
+  }
 });
 
 test("retired workflow names are absent from skill instructions", () => {
@@ -142,131 +159,43 @@ test("retired workflow names are absent from skill instructions", () => {
   }
 });
 
-test("static authority and evidence contracts replace ceremony, not safety", () => {
-  // Source assertions catch accidental wording/surface loss, not model compliance.
+test("charter and skills keep the authority and verdict contracts", () => {
   const { WORKFLOW } = require("../setup.cjs");
-  const skill = (group, name) => fs.readFileSync(path.join(skillsDir, group, name, "SKILL.md"), "utf8");
-  const design = skill("workflow", "design"), verify = skill("workflow", "verify"), commit = skill("workflow", "commit");
-  assert.match(WORKFLOW, /clear bounded request can supply intent/);
-  assert.match(WORKFLOW, /complete candidate/);
-  assert.match(WORKFLOW, /Write limits include scratch probes and cleanup/);
-  assert.match(WORKFLOW, /ask before crossing them/);
-  assert.match(WORKFLOW, /Commit or publish only with explicit authority/);
-  assert.doesNotMatch(WORKFLOW, /design ->|passed dirty candidate goes/);
-  assert.match(design, /Approval is contextual/);
-  assert.doesNotMatch(design, /70%|3–5 variations|next three questions/);
-  assert.match(design, /references\/DECISIONS\.md/);
-  assert.equal(fs.existsSync(path.join(skillsDir, "workflow", "decision-map")), false);
-  assert.match(verify, /VERDICT: PASS \| PASS_WITH_RISKS \| FAIL/);
-  assert.match(verify, /unrun required check/);
-  assert.match(verify, /user-approved deferral/);
-  assert.match(verify, /Read-only forbids creating or changing files, including temporary probes/);
-  assert.match(verify, /Cleanup also needs authority/);
-  assert.match(verify, /report blocked checks or ask permission/);
-  assert.match(verify.replace(/\s+/g, " "), /missing evidence from impossibility/);
-  assert.match(verify.replace(/\s+/g, " "), /Trace test imports and actual approval/);
-  assert.match(verify.replace(/\s+/g, " "), /proposed shared fix through its callers/);
-  assert.match(verify.replace(/\s+/g, " "), /concrete failing input or violated requirement/);
-  const debug = skill("workflow", "debug").replace(/\s+/g, " ");
-  assert.match(debug, /Probes and cleanup need write authority/);
-  assert.match(debug, /Tool acceptance does not expand/);
-  assert.doesNotMatch(debug, /remove the temporary instrumentation you own/);
-  assert.match(skill("workflow", "survey"), /Stay read-only, including current docs/);
-  assert.match(commit, /handoff is evidence, not commit authority/);
-  assert.match(commit, /same complete candidate/);
-  for (const name of ["project-memory", "skill-audit"]) {
-    const text = skill("maintenance", name);
-    assert.match(text, /SKILL_DIR/);
-    assert.doesNotMatch(text, /bun skills\/maintenance\//);
+  for (const rule of [
+    /Commit or publish only with explicit authority/,
+    /Change only files you are authorized to touch/,
+    /in parallel only when it is ready and file-disjoint/,
+    /failed delegated task stays failed/,
+    /self-review that says so/,
+    /explanatory files.*explicit approval/,
+  ]) assert.match(WORKFLOW, rule);
+  assert.match(read("workflow/verify/SKILL.md"), /VERDICT: PASS \| PASS_WITH_RISKS \| FAIL/);
+  assert.match(read("workflow/design/SKILL.md"), /references\/DECISIONS\.md/);
+  for (const name of ["maintenance/project-memory", "maintenance/skill-audit"]) {
+    const text = read(`${name}/SKILL.md`);
+    assert.match(text, /SKILL_DIR/, name);
+    assert.doesNotMatch(text, /bun skills\/maintenance\//, name);
   }
-  assert.match(skill("maintenance", "session-close"), /When nothing would be lost, write nothing/);
 });
 
-test("memory and authoring guidance preserve knowledge without a new framework", () => {
-  // Text contracts, not proof of consuming-agent adherence.
-  const text = (relative) => fs.readFileSync(path.join(skillsDir, relative), "utf8").replace(/\s+/g, " ");
-  const design = text("workflow/design/SKILL.md");
-  assert.match(design, /writing is authorized/);
-  assert.match(design, /explicit no-s, ordering\/numeric requirements/);
-  assert.match(design, /glossary is not a spec/);
-  const memory = text("maintenance/project-memory/PROJECT_MEMORY.md");
-  assert.match(memory, /active record as they settle, within write authority/);
-  assert.match(memory, /Distinguish rejection from temporary deferral/);
-  assert.match(memory, /Do not turn assumptions into standing instructions/);
-  const close = text("maintenance/session-close/SKILL.md");
-  assert.match(close, /Native resume\/fork\/compaction/);
-  assert.match(close, /recipient can reach the paths/);
-  const audit = text("maintenance/skill-audit/SKILL.md");
-  assert.match(audit, /missing, unwired or broken check/);
-  assert.match(audit, /do not install hooks/);
-  assert.match(text("maintenance/write-skill/references/SKILL_STYLE.md"), /mechanically detectable failure/);
+test("only commit, implement and verify restate commit authority", () => {
+  // The always-loaded charter owns it; other skills must not repeat it.
+  for (const name of ["architecture", "debug", "design", "plan", "prototype", "research", "survey"]) {
+    assert.doesNotMatch(read(`workflow/${name}/SKILL.md`), /\b(?:commits?|publish|deploy(?:ment)?)\b|\bpublication(?! date)/i, name);
+  }
 });
 
-test("domain and prototype payloads distinguish review coverage, verification, and authority", () => {
-  const text = (relative) => fs.readFileSync(path.join(skillsDir, relative), "utf8").replace(/\s+/g, " ");
-  const review = text("domain/frontend-design/references/REVIEW.md");
-  assert.match(review, /uninspected discipline or state \*\*Not reviewed\*\*/);
-  assert.match(review, /check that was not run[\s\S]*\*\*Not verified\*\*/);
-  assert.match(review, /A review request changes no source/);
-  const motion = text("domain/frontend-motion/references/REFERENCE.md");
-  assert.match(motion, /native interaction/);
-  assert.match(motion, /live presentation value/);
-  assert.match(motion, /Otherwise report focused/);
-  assert.match(motion, /Measure before optimizing/);
-  const apple = text("domain/apple-interface/REFERENCE.md");
-  assert.match(apple, /when installed/);
-  assert.match(apple, /explicitly Apple direction/);
-  assert.match(apple, /reduced-motion alternative/);
-  const prototype = text("workflow/prototype/SKILL.md");
-  const logic = text("workflow/prototype/LOGIC.md"), ui = text("workflow/prototype/UI.md");
-  assert.match(prototype, /question and recipient/);
-  assert.match(prototype, /cleanup authority/);
-  assert.match(logic, /smallest runnable check/);
-  assert.match(logic, /isolated approved data/);
-  assert.match(ui, /full-size named variant/);
-  assert.match(ui, /reproducible selection/);
-  assert.match(ui, /reduced motion/);
-  assert.match(ui, /The human chooses/);
-  for (const body of [prototype, logic, ui]) assert.doesNotMatch(body, /skip tests|Don't add tests|Make \*\*three\*\*|no more than five/);
+test("Herdr guidance keeps its activation and destructive-command boundaries", () => {
+  const text = read("domain/herdr/SKILL.md").replace(/\s+/g, " ");
+  for (const boundary of [/user explicitly mentions Herdr/, /HERDR_ENV/, /bare `herdr`/, /server stop.*explicitly intends/]) {
+    assert.match(text, boundary);
+  }
 });
 
-test("Herdr guidance retains authority and evidence boundaries without duplicating CLI tutorials", () => {
-  // Prompt preservation only; live model and CLI behavior require separate checks.
-  const text = fs.readFileSync(path.join(skillsDir, "domain/herdr/SKILL.md"), "utf8").replace(/\s+/g, " ");
-  for (const boundary of [
-    /user explicitly mentions Herdr/, /HERDR_ENV/, /not inspect or control.*outside Herdr/,
-    /installed CLI.*authority/, /bare `herdr`/, /mutating nested command/,
-    /current working directory/, /--no-focus/, /available shell pane/,
-    /new workspace-qualified pane ID/, /inherited caller context/,
-    /\[a-z\]\[a-z0-9_-\]\{0,31\}/, /already working/,
-    /alternate screen/, /artifact.*write authority/, /raw terminals.*not agents/,
-    /transport error.*not.*stale/, /`all`.*`any`/,
-    /Canceling or timing out a wait does not stop/,
-    /server stop.*explicitly intends/,
-  ]) assert.match(text, boundary);
-  assert.doesNotMatch(text, /do not request file output in the initial prompt/);
-});
-
-test("portable parallel policy remains in owning workflow contracts", () => {
-  const setup = fs.readFileSync(path.join(root, "setup.cjs"), "utf8");
-  const plan = fs.readFileSync(path.join(skillsDir, "workflow", "plan", "SKILL.md"), "utf8");
-  const implement = fs.readFileSync(path.join(skillsDir, "workflow", "implement", "SKILL.md"), "utf8");
-  const verify = fs.readFileSync(path.join(skillsDir, "workflow", "verify", "SKILL.md"), "utf8");
-
-  assert.match(setup, /Parallelize only ready file-disjoint work/);
-  assert.match(setup, /governed delegation protocol; no silent fallback or unchanged blocked retry/);
-  assert.match(plan, /ready file-disjoint units[\s\S]*active\n  orchestration runtime/);
-  assert.match(implement, /writable files are walls/);
-  assert.match(implement.replace(/\s+/g, " "), /direct requests and delegated packets, including temporary probes and cleanup/);
-  assert.match(plan.replace(/\s+/g, " "), /thin end-to-end slice across a risky boundary/);
-  assert.match(plan.replace(/\s+/g, " "), /name its observable check/);
-  assert.match(plan.replace(/\s+/g, " "), /explain the blocking dependency/);
-  assert.match(plan.replace(/\s+/g, " "), /Return the outline in the response unless/);
-  assert.match(plan.replace(/\s+/g, " "), /input document is not an implicit overwrite target/);
-  assert.match(plan.replace(/\s+/g, " "), /not permission to repurpose unrelated APIs/);
-  assert.match(plan.replace(/\s+/g, " "), /green baseline is not acceptance for new behavior/);
-  assert.match(plan.replace(/\s+/g, " "), /moving its work to direct execution needs explicit authorization/);
-  assert.match(plan.replace(/\s+/g, " "), /Proposed contract defaults remain proposals until approved/);
-  assert.match(verify, /including later hunks|including evidence or fixes added|including evidence[\s\S]*added/);
-  assert.match(verify, /Spec[\s\S]*Standards/);
+test("handoffs use one shared, ignored repository path", () => {
+  const { WORKFLOW } = require("../setup.cjs");
+  const close = read("maintenance/session-close/SKILL.md");
+  for (const text of [WORKFLOW, close]) assert.match(text, /context\/handoff\.md/);
+  assert.match(close, /git check-ignore/);
+  assert.match(close, /agent-private/i);
 });

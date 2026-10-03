@@ -10,7 +10,6 @@ const root = path.resolve(__dirname, "..");
 const script = path.join(root, "setup.cjs");
 const {
   KIRIN_SOURCE,
-  RETIRED_PACKAGES,
   SKILL_PACKS,
   START,
   SUBAGENT_CONFIG,
@@ -24,17 +23,20 @@ const {
   namedSkillSources,
   packageActions,
   parse,
-  removeLegacyManagedAgents,
   planProjectSkills,
   resolveOptions,
   setup,
-  syncProjectSkills,
   syncSharedSkills,
 } = require("../setup.cjs");
 
+function syncProjectSkills(project, packs, decision, checkout, operations) {
+  const plan = planProjectSkills(project, packs, checkout);
+  return { plan, result: applySkillChanges(plan, decision, operations) };
+}
+
 const WORKFLOW_SKILLS = [
   "architecture", "commit", "debug", "design", "implement",
-  "plan", "prototype", "research", "survey", "verify",
+  "plan", "prototype", "research", "survey", "verify", "wait-what",
 ];
 const MAINTENANCE_SKILLS = ["agents-md", "project-memory", "session-close", "skill-audit", "write-skill"];
 const SHARED_SKILLS = [...WORKFLOW_SKILLS, ...MAINTENANCE_SKILLS.filter((name) => name !== "skill-audit"), "chatgpt-export", "herdr"].sort();
@@ -395,7 +397,7 @@ test("individual installation prompts for scope and collision choices without as
 });
 
 test("CLI parsing separates explicit setup from named skill installation", () => {
-  const defaults = { help: false, dryRun: false, home: os.homedir() };
+  const defaults = { help: false, home: os.homedir() };
   assert.deepEqual(parse([]), { ...defaults, help: true });
   assert.deepEqual(parse(["setup"]), { ...defaults, command: "setup" });
   assert.deepEqual(parse(["setup", "--scope", "global"]), { ...defaults, command: "setup", scope: "global" });
@@ -451,13 +453,12 @@ test("option resolution prompts through injected questions and cancels on EOF", 
   fs.mkdirSync(project);
   const answers = ["project", "", "frontend,rust", "yes"];
   const resolved = await resolveOptions(
-    { help: false, dryRun: false, home: path.join(base, "home") },
+    { help: false, home: path.join(base, "home") },
     root,
     { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => answers.shift() },
   );
   assert.deepEqual(resolved, {
     help: false,
-    dryRun: false,
     home: path.join(base, "home"),
     scope: "project",
     project,
@@ -466,7 +467,7 @@ test("option resolution prompts through injected questions and cancels on EOF", 
   });
   await assert.rejects(
     resolveOptions(
-      { help: false, dryRun: false, home: path.join(base, "home") },
+      { help: false, home: path.join(base, "home") },
       root,
       { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => undefined },
     ),
@@ -475,7 +476,7 @@ test("option resolution prompts through injected questions and cancels on EOF", 
   write(path.join(project, ".agents", "skills", "rust", "SKILL.md"), "custom\n");
   await assert.rejects(
     resolveOptions(
-      { help: false, dryRun: false, home: path.join(base, "home"), scope: "project", project, packs: ["rust"] },
+      { help: false, home: path.join(base, "home"), scope: "project", project, packs: ["rust"] },
       root,
       { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => "cancel" },
     ),
@@ -493,27 +494,27 @@ test("scope choices keep setup core global and optional packs project-local", as
 
   const globalAnswers = ["global", "yes"];
   const global = await resolveOptions(
-    { help: false, dryRun: false, home }, root,
+    { help: false, home }, root,
     { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => globalAnswers.shift() },
   );
   assert.deepEqual(global.packs, ["core"]);
 
   const projectAnswers = ["project", "", "rust", "yes"];
   const local = await resolveOptions(
-    { help: false, dryRun: false, home }, root,
+    { help: false, home }, root,
     { input: { isTTY: true }, output: { isTTY: true }, cwd: project, question: async () => projectAnswers.shift() },
   );
   assert.deepEqual(local.packs, ["rust"]);
   await assert.rejects(
     resolveOptions(
-      { help: false, dryRun: false, home, scope: "global", packs: ["rust"], yes: true }, root,
+      { help: false, home, scope: "global", packs: ["rust"], yes: true }, root,
       { input: { isTTY: false }, output: { isTTY: false }, cwd: project },
     ),
     /Global setup installs core only/,
   );
   await assert.rejects(
     resolveOptions(
-      { help: false, dryRun: false, home, scope: "project", packs: ["core"], yes: true }, root,
+      { help: false, home, scope: "project", packs: ["core"], yes: true }, root,
       { input: { isTTY: false }, output: { isTTY: false }, cwd: project },
     ),
     /Project setup installs optional packs only/,
@@ -526,14 +527,14 @@ test("explicit setup scope retains core defaults and requires project packs", as
   const checkout = fixtureCheckout(base);
   fs.mkdirSync(home);
   const global = await resolveOptions(
-    { help: false, dryRun: false, home, scope: "global" }, checkout,
+    { help: false, home, scope: "global" }, checkout,
     { input: { isTTY: false }, output: { isTTY: false }, cwd: base },
   );
   assert.deepEqual(global.packs, ["core"]);
 
   const answers = ["global", "yes"];
   const promptedGlobal = await resolveOptions(
-    { help: false, dryRun: false, home }, checkout,
+    { help: false, home }, checkout,
     { input: { isTTY: true }, output: { isTTY: true }, cwd: base, question: async () => answers.shift() },
   );
   assert.deepEqual(promptedGlobal.packs, ["core"]);
@@ -541,7 +542,7 @@ test("explicit setup scope retains core defaults and requires project packs", as
   const project = path.join(base, "project");
   fs.mkdirSync(project);
   const projectDefault = await resolveOptions(
-    { help: false, dryRun: false, home, scope: "project", packs: ["rust"], yes: true }, checkout,
+    { help: false, home, scope: "project", packs: ["rust"], yes: true }, checkout,
     { input: { isTTY: false }, output: { isTTY: false }, cwd: project },
   );
   assert.equal(projectDefault.project, project);
@@ -549,26 +550,11 @@ test("explicit setup scope retains core defaults and requires project packs", as
 
   await assert.rejects(
     resolveOptions(
-      { help: false, dryRun: false, home, scope: "project" }, checkout,
+      { help: false, home, scope: "project" }, checkout,
       { input: { isTTY: false }, output: { isTTY: false }, cwd: base },
     ),
     /requires --packs/,
   );
-});
-
-test("legacy managed agents are removed without deleting user edits", () => {
-  const home = tempDir();
-  const dir = path.join(home, ".pi", "agent", "agents");
-  const managed = "managed\n";
-  const hash = require("node:crypto").createHash("sha256").update(managed).digest("hex");
-  write(path.join(dir, "scout.md"), managed);
-  write(path.join(dir, "reviewer.md"), "user edit\n");
-  write(path.join(dir, ".kirin-managed-agents.json"), `${JSON.stringify({ "scout.md": hash, "reviewer.md": hash })}\n`);
-
-  assert.deepEqual(removeLegacyManagedAgents(home), { removed: 1, preserved: 1 });
-  assert.equal(fs.existsSync(path.join(dir, "scout.md")), false);
-  assert.equal(fs.readFileSync(path.join(dir, "reviewer.md"), "utf8"), "user edit\n");
-  assert.equal(fs.existsSync(path.join(dir, ".kirin-managed-agents.json")), false);
 });
 
 test("native readline cancels on EOF and Ctrl-C without running setup", async () => {
@@ -581,14 +567,14 @@ test("native readline cancels on EOF and Ctrl-C without running setup", async ()
     const output = new PassThrough();
     input.isTTY = true;
     output.isTTY = true;
-    const pending = resolveOptions({ help: false, dryRun: false, home }, root, { input, output });
+    const pending = resolveOptions({ help: false, home }, root, { input, output });
     queueMicrotask(() => endInput(input));
     await assert.rejects(pending, /cancelled/);
     assert.deepEqual(fs.readdirSync(home), []);
   }
 });
 
-test("package plan tracks latest Nico and normalizes legacy Kirin filters", () => {
+test("package plan tracks latest Kirin, Nico and web access", () => {
   assert.deepEqual(packageActions({ packages: [] }).map((item) => item.action), ["install", "install", "install"]);
 
   const current = packageActions({ packages: [KIRIN_SOURCE, "npm:pi-subagents", "npm:pi-web-access"] });
@@ -602,15 +588,6 @@ test("package plan tracks latest Nico and normalizes legacy Kirin filters", () =
     { source: "npm:pi-web-access", action: "update" },
   ]);
 
-  const migrated = packageActions({ packages: [
-    { source: KIRIN_SOURCE, extensions: ["harness/extensions/*.ts"], skills: [] },
-    "npm:pi-web-access",
-    RETIRED_PACKAGES[0],
-  ] });
-  assert.deepEqual(migrated.map((item) => item.action), ["remove", "remove", "install", "install", "update"]);
-  assert.deepEqual(migrated.map((item) => item.source), [
-    RETIRED_PACKAGES[0], KIRIN_SOURCE, KIRIN_SOURCE, "npm:pi-subagents", "npm:pi-web-access",
-  ]);
 });
 
 test("project skill sync preserves custom skills and recognizes identical reruns", () => {
@@ -652,17 +629,6 @@ test("project skill sync applies one decision to mixed additions and collisions"
   assert.equal(cancelled.plan.collisions.some((skill) => skill.name === "rust"), true);
   assert.equal(fs.readFileSync(rust, "utf8"), "old rust\n");
   assert.equal(fs.existsSync(path.join(project, ".agents", "skills", "python-tooling")), false);
-
-  const originalLog = console.log;
-  const logs = [];
-  console.log = (...items) => logs.push(items.join(" "));
-  try {
-    setup({ scope: "project", project, packs: ["rust", "python"], decision: "skip", dryRun: true }, checkout);
-  } finally {
-    console.log = originalLog;
-  }
-  assert.equal(logs.some((line) => line.includes("2 skill target(s) to add, 0 to replace, 2 unchanged or skipped")), true);
-  assert.equal(fs.existsSync(path.join(project, ".claude", "skills", "rust")), false);
 
   const skipped = syncProjectSkills(project, ["rust", "python"], "skip", checkout);
   assert.equal(fs.readFileSync(rust, "utf8"), "old rust\n");
@@ -1016,7 +982,7 @@ test("global core sync preserves unselected skills and excludes harness-only aud
   assert.equal(fs.existsSync(path.join(roots[0], "hand-written", "SKILL.md")), true);
   assert.equal(fs.readFileSync(path.join(roots[1], "rust", "SKILL.md"), "utf8"), "optional rust\n");
   assert.equal(fs.readFileSync(path.join(oldSource, "SKILL.md"), "utf8"), "stale design\n");
-  assert.equal(first.count, 16);
+  assert.equal(first.count, SHARED_SKILLS.length);
   for (const dir of roots) {
     assert.equal(fs.lstatSync(path.join(dir, "design")).isDirectory(), true);
     assert.match(fs.readFileSync(path.join(dir, "design", "SKILL.md"), "utf8"), /name: design/);
@@ -1027,7 +993,7 @@ test("global core sync preserves unselected skills and excludes harness-only aud
   write(path.join(checkout, "skills", "workflow", "design", "updated.txt"), "updated\n");
   fs.rmSync(path.join(checkout, "skills", "workflow", "survey"), { recursive: true });
   const second = syncSharedSkills(checkout, home, "replace");
-  assert.equal(second.count, 15);
+  assert.equal(second.count, SHARED_SKILLS.length - 1);
   for (const dir of roots) {
     assert.equal(fs.existsSync(path.join(dir, "survey", "SKILL.md")), true);
     assert.equal(fs.readFileSync(path.join(dir, "skill-audit", "SKILL.md"), "utf8"), "previously installed audit\n");
@@ -1116,16 +1082,16 @@ test("malformed instructions fail before shared skills swap", () => {
   }
 });
 
-test("Claude imports canonical Pi AGENTS while custom text survives", () => {
+test("Claude imports canonical AGENTS while custom text survives", () => {
   const home = tempDir();
   const piAgents = path.join(home, ".pi", "agent", "AGENTS.md");
-  write(piAgents, `${WORKFLOW}\n\n<!-- kirin-ratchet:start -->\n## Earned\n\n- Keep me.\n<!-- kirin-ratchet:end -->\n`);
+  const canonicalText = `${WORKFLOW}\n\n## Earned\n\n- Keep me.\n`;
+  write(path.join(home, ".agents", "AGENTS.md"), canonicalText);
+  write(piAgents, canonicalText);
   write(path.join(home, ".claude", "CLAUDE.md"), `${WORKFLOW}\n\nCustom Claude note.\n`);
 
   const first = installInstructions(home, "run-1", true);
-  // Nothing to back up: the Pi file already held exactly what would be written,
-  // so it is left alone. The old layout backed it up regardless, because turning
-  // a file into a symlink destroyed it even when the content matched.
+  // Nothing to back up: the Pi file already held exactly what would be written.
   assert.equal(first.backups.length, 0);
   const canonical = path.join(home, ".agents", "AGENTS.md");
   // Real files, not links: editors and agent tooling refuse to write through a
@@ -1188,9 +1154,9 @@ test("a second run rewrites a hand-edited copy from the canonical file", () => {
   );
 });
 
-test("Claude-specific earned rules survive canonicalization", () => {
+test("Claude-specific rules survive canonicalization", () => {
   const home = tempDir();
-  write(path.join(home, ".claude", "CLAUDE.md"), "<!-- kirin-ratchet:start -->\n## Claude only\n\n- Keep this too.\n<!-- kirin-ratchet:end -->\n");
+  write(path.join(home, ".claude", "CLAUDE.md"), "## Claude only\n\n- Keep this too.\n");
   installInstructions(home, "run-1", false);
   const claude = fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8");
   assert.match(claude, /^@AGENTS\.md/);
@@ -1386,7 +1352,7 @@ test("spawned CLI mirrors global core and project selections without a TTY", () 
   assert.equal(global.status, 0, global.stderr);
   for (const directory of [".agents", ".claude"]) {
     const skillRoot = path.join(globalHome, directory, "skills");
-    assert.equal(fs.readdirSync(skillRoot).length, 16);
+    assert.equal(fs.readdirSync(skillRoot).length, SHARED_SKILLS.length);
     assert.equal(fs.existsSync(path.join(skillRoot, "rust", "SKILL.md")), false);
     assert.equal(fs.existsSync(path.join(skillRoot, "skill-audit", "SKILL.md")), false);
   }
@@ -1416,21 +1382,6 @@ test("spawned CLI mirrors global core and project selections without a TTY", () 
   assert.equal(fs.readFileSync(path.join(project, ".agents", "skills", "rust", "SKILL.md"), "utf8"), "custom\n");
 });
 
-test("internal dry run mutates neither home nor repository", () => {
-  const home = tempDir();
-  const before = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
-  const originalLog = console.log;
-  console.log = () => {};
-  try {
-    const result = setup({ home, dryRun: true, pi: null }, root);
-    assert.deepEqual(result, { dryRun: true, pi: false });
-  } finally {
-    console.log = originalLog;
-  }
-  assert.equal(fs.readdirSync(home).length, 0);
-  assert.equal(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), before);
-});
-
 test("explicit setup installs shared skills and Claude instructions without Pi", () => {
   const home = tempDir();
   const result = spawnSync(process.execPath, [script, "setup", "--scope", "global"], {
@@ -1442,7 +1393,7 @@ test("explicit setup installs shared skills and Claude instructions without Pi",
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Pi not found in PATH/);
   assert.equal(fs.existsSync(path.join(home, ".pi")), false);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 16);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, SHARED_SKILLS.length);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");
   const claudeAgents = path.join(home, ".claude", "AGENTS.md");
   assert.equal(fs.lstatSync(claudeAgents).isSymbolicLink(), false);
@@ -1468,7 +1419,7 @@ test("explicit setup adds Pi-specific setup only when Pi is in PATH", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Kirin setup complete/);
   assert.equal(fs.readFileSync(path.join(home, "pi-calls"), "utf8").trim().split("\n").length, 3);
-  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, 16);
+  assert.equal(fs.readdirSync(path.join(home, ".agents", "skills")).length, SHARED_SKILLS.length);
   assert.equal(fs.readFileSync(path.join(home, ".pi", "agent", "agents", "reviewer.md"), "utf8"), "custom reviewer\n");
   assert.equal(fs.existsSync(path.join(home, ".pi", "agent", "agents", ".kirin-managed-agents.json")), false);
   assert.equal(fs.readFileSync(path.join(home, ".claude", "CLAUDE.md"), "utf8"), "@AGENTS.md\n");

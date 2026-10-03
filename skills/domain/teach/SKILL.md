@@ -1,52 +1,64 @@
 ---
 name: teach
-description: "When the user explicitly wants to learn a subject as an ongoing, multi-session effort — a study plan, curriculum, or learning workspace — not a one-off question or quick explanation. Turns the cwd into a teaching workspace with a mission, trusted resources, short lessons, and learning records."
+description: "When the user explicitly wants a guided lesson or course — teach a focused session in chat by default, with a persistent learning workspace only on request. Not needed for everyday explanations."
 disable-model-invocation: true
 ---
 
 # Teach
 
-Treat the current directory as a teaching workspace. The point is not to answer
-one question well; it is to leave behind a better learner and a workspace that
-knows where they are. Enter this mode only for a real request to learn something
-over time — if the user just wants a one-off answer, give it and stop, don't
-open a workspace. Before scaffolding files, confirm they want a persistent,
-multi-session workspace in this directory, and resume an existing one rather
-than restarting it.
+Help the user gain understanding they can use, not just read a fluent answer.
+Enter only for an explicit learning request. Ordinary conversation still explains
+naturally without invoking this skill or turning every answer into a lesson.
 
-Resist: generic tutoring, relying on parametric knowledge, long lessons,
-activity logs, and drifting away from the user's real reason for learning.
+## Focused session
 
-- Start with the mission. If `MISSION.md` is absent or vague, interview for the
-  concrete outcome first; write or update it with
-  [MISSION-FORMAT.md](MISSION-FORMAT.md).
-- Build knowledge from trusted sources, not memory. Curate `RESOURCES.md` with
-  [RESOURCES-FORMAT.md](RESOURCES-FORMAT.md), separating **Knowledge** from
-  **Wisdom** / communities, and surface gaps explicitly. Wisdom is earned in the
-  real world: answer what you can, then point the user to a high-reputation
-  community to test it.
-- Teach one small win at a time. Each session usually produces one short lesson
-  under `lessons/NNNN-slug.html`: tightly scoped, tied to the mission,
-  completable quickly, and clean enough to print. Back every claim with a
-  citation and point to the one best primary source; link to related lessons and
-  reference docs; offer to open the file; and close by inviting follow-up
-  questions.
-- Keep the user's zone of proximal development current. Read `learning-records/`
-  before choosing what to teach next; write a new numbered record only when the
-  user demonstrated understanding, disclosed prior knowledge, corrected a
-  misconception, or changed the mission, using
-  [LEARNING-RECORD-FORMAT.md](LEARNING-RECORD-FORMAT.md). Keep teaching
-  preferences and open threads in `NOTES.md`, separate from what was learned.
-- Separate knowledge from retention. Keep explanations as simple as possible,
-  then build storage strength with retrieval practice, spaced revisit, and light
-  interactive work with immediate feedback — and keep quiz answers the same
-  length so formatting leaks no tell. Difficulty belongs in practice, not in
-  exposition.
-- Build durable references. Promote compressed, reusable knowledge into
-  `reference/*.html` docs and `GLOSSARY.md` only after the user genuinely
-  understands it. Glossary terms become the canonical language; use
-  [GLOSSARY-FORMAT.md](GLOSSARY-FORMAT.md).
+Default to teaching in chat, without files or workspace setup.
 
-Deliver: updated mission/resources/records as needed, the next lesson or
-resource move that best serves the mission, and what evidence would justify the
-next learning record or glossary addition.
+- Establish the goal and starting point before choosing a lesson. Use knowledge
+  the user already supplied; otherwise ask a brief question or offer a small
+  diagnostic. Do not assume expertise or repeat an unnecessary interview.
+- Teach one useful idea at a time, tied to what the user wants to do. Define
+  unfamiliar terms, use a concrete example, and keep difficulty out of the
+  explanation. Offer a short open-ended check or practical exercise with feedback;
+  practice is optional, and the user can stop or change direction.
+- Ground instruction in trusted sources, not unsupported recall. Verify precise
+  procedures and notation before teaching them; name gaps rather than inventing
+  an answer. Cite the relevant evidence and offer the best primary source for
+  further reading. Distinguish documented knowledge from experience-based judgment.
+- Adapt to demonstrated understanding and corrected misconceptions. Covering a
+  topic or receiving thanks is not evidence of mastery. Use retrieval and later
+  revisits when useful; this is teaching judgment, not a scheduling service.
+
+Deliver a focused lesson or the next question needed to teach it, plus an optional
+practice or next step. Do not create learning records or explanatory files for a
+chat session. If the user wants continuity across sessions, offer a workspace;
+do not create one merely because learning might continue.
+
+## Persistent workspace, when requested
+
+Confirm the chosen directory and permission to save a course before scaffolding.
+Prefer a dedicated workspace; do not convert a working project implicitly.
+Resume existing material rather than restarting it, and create only needed files.
+All learning output belongs under the approved workspace root. The format links
+below resolve from the loaded skill directory, never from the output directory.
+
+- Ground the course in `MISSION.md`, using [MISSION-FORMAT.md](MISSION-FORMAT.md).
+  Clarify a missing or vague outcome before writing it.
+- Curate `RESOURCES.md` with [RESOURCES-FORMAT.md](RESOURCES-FORMAT.md), separating
+  **Knowledge** from **Wisdom** / communities and recording source gaps. For
+  experience-based questions, offer a reputable community where useful and wanted.
+- Save short, self-contained lessons under `lessons/NNNN-slug.html`, tied to the
+  mission and one tangible win. Cite claims, recommend one primary source, link
+  related lessons/references, and reuse existing assets. Offer to open the lesson.
+- Read `learning-records/` before choosing the next lesson. Write a numbered record
+  only for demonstrated understanding, disclosed prior knowledge, a corrected
+  misconception or a changed mission, using
+  [LEARNING-RECORD-FORMAT.md](LEARNING-RECORD-FORMAT.md). Keep preferences and open
+  threads in `NOTES.md`, not activity logs. Switch to review or real practice when
+  it serves the mission better than another lesson.
+- Promote understood, reusable material into `reference/*.html` and `GLOSSARY.md`
+  only when useful, using [GLOSSARY-FORMAT.md](GLOSSARY-FORMAT.md). Retention work
+  can use retrieval, spacing and varied practice; do not promise scheduled review.
+
+Deliver the next useful learning step and only the course files warranted by the
+request and evidence. Do not infer learning from the existence of a lesson.

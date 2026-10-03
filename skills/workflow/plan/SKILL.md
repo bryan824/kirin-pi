@@ -14,7 +14,7 @@ step for every bounded request.
   are requested additions, not permission to repurpose unrelated APIs.
 - Return the outline in the response unless the request clearly authorizes writing
   a planning file. An input document is not an implicit overwrite target. When
-  persistence is authorized, reuse one suitable effort record. Include outcomes,
+  persistence is authorized, reuse the task's existing working notes. Include outcomes,
   exclusions, constraints, acceptance, risks and rollback; derive acceptance from
   the user's requirements, not convenient tests. A green baseline is not acceptance
   for new behavior; name the new check and how it reaches that behavior.
@@ -33,15 +33,13 @@ step for every bounded request.
   worktree and artifact identities in handoffs when applicable. A failed delegated
   path stays blocked: changing model, CLI or moving its work to direct execution
   needs explicit authorization, not a shortcut in the plan.
-- Make consequential choices and scope explicit for approval. Existing authority
-  can cover equivalent implementation details; changed material intent requires
-  an amendment, not silent adaptation. Open requirements need evidence, an
-  explicit user-approved deferral, or a blocker. Proposed contract defaults remain
-  proposals until approved; silence does not settle a dependency.
+- Make consequential choices and scope explicit for approval; `design` owns what
+  counts as approval. Equivalent implementation details need no new approval.
+  Open requirements need evidence, a user-approved deferral, or a blocker;
+  proposed contract defaults stay proposals until approved.
 
 [PLAN_TEMPLATE.md](PLAN_TEMPLATE.md) is an optional starting point, not a required
 file location or output quota.
 
 Deliver: intent source, ready work, ownership, verification and rollback. Planning
-does not authorize implementation, commits, deployment, or a delegation-protocol
-switch.
+alone does not authorize implementation.

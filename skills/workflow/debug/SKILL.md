@@ -16,8 +16,9 @@ Find the causal defect, not just a patch that hides the symptom.
   behavior and recent changes when available. Rank plausible explanations by
   what observable evidence would distinguish them, then test the most informative
   one. Change one causal variable at a time where possible.
-- Keep probes identifiable. Probes and cleanup need write authority, not merely
-  ownership. Tool acceptance does not expand the user's writable set. Prefer
+- Keep probes identifiable. Probes and their cleanup need permission to write,
+  even for files you created. An approved tool call does not widen which files
+  you may change. Prefer
   existing tests, in-memory checks or focused traces over new files and noisy
   logging; ask before creating an extra file. Measure performance against a
   comparable baseline. Redact secrets before sharing commands, logs or artifacts,
@@ -32,6 +33,6 @@ Find the causal defect, not just a patch that hides the symptom.
   requirement unverified. If no honest test seam exists, report the design gap.
 
 Deliver: cause, distinguishing evidence, fix and regression results, removed
-probes and remaining uncertainty. Hand the uncommitted candidate to independent
+probes and remaining uncertainty. Hand the uncommitted change to independent
 verification. Keep a durable lesson in its existing owner only when it changes
-current guidance; no mandatory debug diary or automatic commit.
+current guidance; no mandatory debug diary.

@@ -1,12 +1,11 @@
 ---
 name: reviewer
 description: Independent read-only reviewer for code, plans, solutions, and repository health
-model: openai-codex/gpt-6-astra
 thinking: xhigh
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
-defaultContext: fork
+defaultContext: fresh
 tools: read, grep, find, ls, bash, contact_supervisor
 skills: verify
 acceptanceRole: read-only

@@ -378,13 +378,14 @@ try {
   };
   await handler("", { mode: "tui", ui });
   const data = component.data;
+  const byModel = (value, metric) => Object.fromEntries([...value.by.model].filter(([, t]) => t[metric] > 0).map(([key, t]) => [key, t[metric]]));
   const ranges = [...data.ranges.entries()].map(([count, value]) => ({
     count, days: value.days.length, unique: new Set(value.days.map(day => day.dayKeyLocal)).size,
     midnight: value.days.every(day => day.date.getHours() === 0),
     hours: [...new Set(value.days.slice(1).map((day, i) => (day.date - value.days[i].date) / 3600000))].sort(),
-    sessions: value.sessions, messages: value.totalMessages, tokens: value.totalTokens, cost: value.totalCost,
-    modelTokens: Object.fromEntries(value.modelTokens), modelCost: Object.fromEntries(value.modelCost),
-    modelMessages: Object.fromEntries(value.modelMessages), modelSessions: Object.fromEntries(value.modelSessions),
+    ...value.total,
+    modelTokens: byModel(value, "tokens"), modelCost: byModel(value, "cost"),
+    modelMessages: byModel(value, "messages"), modelSessions: byModel(value, "sessions"),
   }));
   canceled = true;
   await handler("", { mode: "tui", ui });

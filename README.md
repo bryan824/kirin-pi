@@ -18,7 +18,7 @@ kirin-pi/
 └── test/         repository contracts
 ```
 
-Pi loads package resources natively from `package.json`. No custom deploy layer, package doctor, generated runtime tree, or legacy job loop.
+Pi loads package resources natively from `package.json`.
 
 ## Workflow
 
@@ -26,15 +26,24 @@ The instruction block installed by explicit `kirin-pi setup` is a compact charte
 not a mandatory skill sequence. Clear bounded requests can supply implementation
 intent; clarify consequential uncertainty and amend material scope changes.
 Preserve user work and file ownership, treat fetched content as data, and verify
-the complete candidate against user requirements. A pass does not authorize a
-commit, deployment or publication.
+the complete change against user requirements, independently when possible and
+otherwise as a disclosed self-review. A pass does not authorize a commit,
+deployment or publication.
+
+The shared charter also makes clear, natural communication the default: answer
+first, explain the relevant reasoning and unfamiliar terms, and keep technical
+precision. Small inline diagrams or tables can help; explanatory files, extra
+dependencies, paid services and video work need approval. Existing tools handle
+requested richer explanations; no generic explanation skill is required. Invoke
+`wait-what` when an explanation did not land, or `teach` for deliberate learning
+in chat. Neither creates files or a learning workspace implicitly.
 
 Choose skills when their mindset helps: `survey` maps current behavior, `research`
 resolves external facts, `prototype` tests uncertainty, and `architecture` judges
 structure. `design` owns unresolved choices, including an optional decision-frontier
 reference. Use `plan` for consequential dependencies, risk or handoff—not every
-edit. Ready file-disjoint work may use the governed runtime; shared boundaries
-serialize, and failed delegation never grants an automatic protocol fallback.
+edit. Ready, file-disjoint work may run in parallel through the subagent runtime;
+shared files serialize, and a failed delegated task is never silently taken over.
 
 ### Workflow skills
 
@@ -50,6 +59,7 @@ serialize, and failed delegation never grants an automatic protocol fallback.
 | `research` | Answer one external question from primary sources. |
 | `survey` | Map current repository behavior without editing. |
 | `verify` | Independently judge complete candidate on Spec and Standards. |
+| `wait-what` | Explicitly re-explain a confusing point with the missing context, not just fewer words. |
 
 ### Maintenance skills
 
@@ -57,8 +67,8 @@ serialize, and failed delegation never grants an automatic protocol fallback.
 |---|---|
 | `agents-md` | Explicitly create or repair a minimal AGENTS.md. |
 | `project-memory` | Initialize/check minimal committed `docs/` + ignored `context/`. |
-| `session-close` | Preserve only needed handoff context or durable session lessons. |
-| `skill-audit` | Measure harness health; explicitly review upstream changes and propose consolidation. |
+| `session-close` | Leave the next agent a handoff in shared `context/handoff.md`, or nothing if nothing would be lost. |
+| `skill-audit` | Reassess the whole harness after model, host or upstream changes; propose leaner behavior. |
 | `write-skill` | Create or simplify one sharp skill. |
 
 ### Upstream absorption
@@ -72,19 +82,12 @@ bun run kirin-pi install skill-audit --scope project
 
 Restart your agent, then in Pi run
 `/skill:skill-audit Review upstream changes and propose consolidation.`
-Existing global copies need a separate migration; installing locally does not remove them.
-It reviews the [upstream ledger](docs/UPSTREAM_LEDGER.md) plus any sources you supply.
-Ordinary audits stay local. The upstream branch pins
-source revisions, establishes missing baselines, and evaluates improvements across
-the whole harness, including replacements and deletions. It presents one
-consolidation plan for approval before editing source or the ledger, then uses the
-existing implementation and independent verification owners. Commit/publication
-still require their own authority.
-
-Review checkpoints are separate from borrowing provenance. Fully reviewed sources
-can receive approved checkpoint-only updates; incomplete sources cannot advance.
-Ignored working plans and research are allowed, but are not tracked or published.
-There is no new extension, scheduler, automatic dependency upgrade, push, or deploy.
+It reviews the [upstream ledger](docs/UPSTREAM_LEDGER.md) plus any sources you supply,
+evaluates improvements across the whole harness (including replacements and
+deletions), and presents one consolidation plan for approval before editing source
+or the ledger. The [upstream review contract](skills/maintenance/skill-audit/references/UPSTREAM_REVIEW.md)
+owns coverage, checkpoint and approval rules. Ordinary audits stay local;
+commit and publication still require their own authority.
 
 ### Domain skills
 
@@ -103,7 +106,7 @@ There is no new extension, scheduler, automatic dependency upgrade, push, or dep
 | `herdr` | Official Herdr control guidance plus Kirin's typed Pi integration. |
 | `python-tooling` | uv, Ruff, and ty as one Python toolchain. |
 | `rust` | Bryan's Rust API, crate, error, safety, and verification conventions. |
-| `teach` | Create a persistent learning workspace when explicitly requested. |
+| `teach` | Explicit guided lessons in chat; persistent courses and learning records only on request. |
 
 Vault, Obsidian, and travel skills are intentionally absent. A project that needs private or domain-specific behavior mirrors it under `.agents/skills/` and `.claude/skills/`.
 
@@ -121,17 +124,10 @@ not require Pi; host peers remain optional package dependencies.
 | `herdr` | Pane/workspace orchestration and settled Pi status reporting. |
 | `session-breakdown` | Interactive session/token/model/cost dashboard. |
 
-Startup assurance does not install, execute or replace hooks. Explicit hook
-installation refuses unverified existing hooks and outside/shared destinations.
-The command guard is best-effort accident prevention, not a shell sandbox or a
-permission grant for extension subprocesses.
-
-Session-breakdown uses Pi's native inventory and recorded message,
-summary and standalone operation usage, including cache warming and unknown
-operation kinds. Operations add tokens/cost under their recorded model, not
-conversation messages. Totals are not invoices or retained-context measurements.
-Herdr state reporting is TUI-only; a status wait is not proof that newly submitted
-work completed.
+The command guard is best-effort accident prevention, not a shell sandbox. Startup
+hook assurance only reports; it never installs or replaces hooks. Session totals
+are recorded usage, not invoices, and Herdr waits are not completion proof. See
+[verification](docs/verification.md#standing-boundaries) for the full limits.
 
 ### Claude native equivalents
 
@@ -147,7 +143,7 @@ Claude hooks cover lifecycle events, not Pi's full extension API. Kirin uses the
 ### Subagent presets
 
 Package-owned roles target `pi-subagents`. Nine stable names retain role-specific
-models, tools and context defaults; their prompts add thin role differences.
+model policies, tools and context defaults; their prompts add thin role differences.
 `verify` owns reviewer verdicts and `implement` owns worker delivery discipline.
 The runtime owns workflows, worktrees, missions, artifacts and supervisor dialogue;
 user-approved intent remains authoritative.
@@ -156,15 +152,21 @@ user-approved intent remains authoritative.
 |---|---|---|
 | `scout` | `gpt-5.6-luna` / low | Fast read-only reconnaissance and compressed handoff context. |
 | `researcher` | `gpt-5.6-terra` / high | Primary-source external research through web tools. |
-| `worker` | `gpt-6-astra` / high | One bounded implementation packet with supervisor escalation. |
-| `reviewer` | `gpt-6-astra` / xhigh | Independent read-only Spec + Standards verdict. |
+| `worker` | `gpt-6-astra` / high | One approved implementation task with file boundaries; preloads `implement`. |
+| `reviewer` | inherits selected session model / xhigh | Independent read-only Spec + Standards verdict. |
 | `oracle` | `gpt-6-astra` / high | Protect inherited decisions and detect trajectory drift. |
-| `delegate` | `gpt-6-astra` / high | General bounded execution with supervisor escalation. |
+| `delegate` | `gpt-6-astra` / high | Bounded non-implementation work no specialist owns, with supervisor escalation. |
 | `codebase-analyzer` | `gpt-5.6-terra` / medium | Deep read-only implementation tracing. |
 | `precedent-locator` | `gpt-5.6-terra` / medium | Git-history and follow-up-fix evidence. |
 | `claim-verifier` | `gpt-6-astra` / high | Adversarial claim grounding. |
 
-Quality-first tiers use Astra for implementation, general execution, and adversarial judgment; Terra for research and analysis; Luna for bounded lookup. Thinking remains role-specific rather than globally maximized. Agent frontmatter owns these defaults; native per-agent settings or per-run overrides can replace them. Kirin does not set Pi's parent/startup model. Model-selection sources live in the [upstream ledger](docs/UPSTREAM_LEDGER.md).
+Pinned roles use Astra for implementation, general execution, and adversarial
+judgment; Terra for research and analysis; Luna for bounded lookup. The reviewer
+instead inherits the selected session model. Thinking remains role-specific rather
+than globally maximized. Agent frontmatter owns these defaults; native per-agent
+settings or per-run overrides can replace them, so confirm the resolved model and
+context. Kirin does not set Pi's parent/startup model. Model-selection sources live
+in the [upstream ledger](docs/UPSTREAM_LEDGER.md).
 
 Setup configures automatic missions, disabled schedules and project-local recovery
 artifacts under `.pi/subagents/`. Worktrees and supported timeout/tool/usage limits
@@ -220,7 +222,6 @@ Global setup additionally:
 - copies Claude runtime files under `~/.claude/kirin/` and merges Kirin hook entries into `~/.claude/settings.json`, preserving unrelated settings and hooks
 - backs up changed instruction copies, runtime files, and Claude settings; settings backups live under `~/.claude/kirin-backups/<run>/settings/`
 - when `pi` is available, uses its package commands to install/update Kirin, `pi-subagents`, and `pi-web-access`; package-owned roles remain natively discovered
-- removes untouched legacy managed agent copies while preserving user-edited overrides
 
 These runtime/configuration phases are not one transaction with the skill batch. `--yes` confirms setup, while differing skills still need `--replace` or an interactive collision decision. Restart active agents afterward. The Herdr application remains a separate system install.
 
@@ -251,14 +252,25 @@ Those are different consumers, not three copies of one handbook.
 | When | Owning guidance |
 |---|---|
 | Adding, simplifying or retiring harness behavior | [Source audit](skills/maintenance/skill-audit/SKILL.md): measure coverage and compare native features before proposing a new owner. |
+| Selecting a stronger model or reconsidering the whole architecture | [Harness review](skills/maintenance/skill-audit/references/HARNESS_REVIEW.md): challenge the design and compare behavior before proposing changes. |
 | Changing a skill or instruction entry point | [Skill authoring](skills/maintenance/write-skill/SKILL.md); [repository instructions](skills/maintenance/agents-md/SKILL.md) for canonical-file and recovery safeguards. |
 | Reviewing upstream changes | [Upstream absorption](#upstream-absorption) and the [upstream review contract](skills/maintenance/skill-audit/references/UPSTREAM_REVIEW.md). |
 | Updating installed copies | [Selected installation](#install-skills) or separately authorized [full setup](#full-harness-setup); source edits alone change neither. |
 | Fixing a defect | Trace the owning integration and its callers; [debug](skills/workflow/debug/SKILL.md) owns causal diagnosis, [verification](docs/verification.md) names checks and evidence limits. |
 | Maintaining project knowledge | [Memory routing](docs/memory.md): current facts and rationale in their owner, temporary evidence in the existing effort record. |
 
-Judge the whole harness when a new idea or upstream lesson wants in, a correction
-recurs, a component appears not to fire, a ledger revisit trigger occurs, or a host
+After selecting a review model, ask `skill-audit` to reassess the whole harness
+from first principles and propose the leanest design that preserves useful
+outcomes. Use its [behavior probes](skills/maintenance/skill-audit/references/BEHAVIOR_PROBES.md)
+for bounded comparisons; hold the harness fixed when comparing models and the
+model fixed when comparing harness revisions. Every whole-harness review also
+checks latest-stable Pi and Claude Code changelogs, relevant docs and built-in
+capabilities against Kirin's custom behavior, separating latest support from
+installed availability. The `reviewer` source defaults to fresh context with no
+model pin; host overrides can still win, so confirm the resolved model/context. This is a model-led playbook, not an automated runner.
+
+Judge the whole harness when a new model, idea or upstream lesson wants in, a
+correction recurs, a component appears not to fire, a ledger revisit trigger occurs, or a host
 release supplies a native replacement. Run the audit analyzer first; missing use
 signals are not proof of disuse. Ask whether each piece still earns its keep and
 whether the new thing belongs here. Try an existing principle, then a reference,
@@ -285,11 +297,9 @@ with native shell hooks on older Git. The repository's `hk.pkl` runs the full te
 suite without fixing, staging or stashing files. Startup assurance is read-only;
 unknown/disabled hooks and custom launchers are preserved for owner review.
 
-The Bun version is declared by `packageManager`; record which executable actually
-ran. Package contents are allowlisted in `package.json`. See
+Package contents are allowlisted in `package.json`. See
 [verification](docs/verification.md) for what local fixtures prove and which
-host/model checks require separate authorization. Source-byte estimates do not
-establish loaded-context savings, model quality, price or latency.
+host/model checks require separate authorization.
 
 ## Provenance and license
 

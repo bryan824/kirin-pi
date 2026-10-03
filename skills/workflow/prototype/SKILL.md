@@ -25,7 +25,7 @@ not a compulsory TUI, web page or production scaffold.
   artifact, do not invent their verdict.
 
 Deliver: question, artifact/run instructions, scenarios, evidence and decision or
-remaining uncertainty in the existing effort record. Absorb only validated logic
+remaining uncertainty in the task's existing working notes. Absorb only validated logic
 or the selected direction under production standards and authorization. Remove
 owned throwaway work only within cleanup authority; preserve user edits and
-records. No automatic publication, deployment or new decision diary.
+records. No new decision diary.

@@ -5,20 +5,47 @@ description: "When ending a session or switching agents — leave only the resum
 
 # Session Close
 
-Leave a recoverable next step, not a diary.
+Leave the next agent a recoverable next step, not a diary. The next agent may run
+on a different host, so it can read only what is in the repository.
 
-Reuse the existing effort or runtime record. Only create a handoff when needed
-context would otherwise be lost: approved scope, decisions, changed files,
-verification evidence, blockers, artifact/worktree identities and the next action.
-Native resume/fork/compaction may already carry the thread; a portable file earns
-its keep when the destination cannot. Link existing artifacts instead of copying
-them, and check that the recipient can reach the paths. Separate completed work
-from proposed or unverified work; redact secrets.
+## Where it goes
 
-A reusable lesson belongs in its owning code, test, skill or current doc when
-that edit is authorized. Otherwise propose the correction. Do not create a second
-reflection beside an adequate record, or clean up user records on the way out.
-Recheck referenced files and commits when resuming; a handoff can be stale.
+Write the handoff to `context/handoff.md` at the repository root. Agent-private
+stores, such as Claude Code's project memory, a Pi session or a scratchpad, are
+invisible to another agent: never use them as the handoff or as the only copy of
+anything it needs.
 
-Deliver: the updated record or an explicit no-record result, plus the next action
-if work continues. When nothing would be lost, write nothing.
+- Check that the file is git-ignored (`git check-ignore -q context/handoff.md`).
+  If it is not, ask before writing it; do not change ignore rules unasked.
+- The file holds the current handoff, not a log. Update it in place. If it already
+  describes different unfinished work, ask before replacing it.
+- If an existing record under `context/` already covers this work, link to it from
+  the handoff instead of copying it.
+
+## What it holds
+
+Approved scope; decisions, including explicit no-s and their reasons; changed files
+and whether they are committed; verification evidence and unrun checks; open issues
+and blockers; worktree or run identities; and the exact next action. Link existing
+artifacts rather than copying them, and check the next agent can reach the paths.
+Separate finished work from proposed or unverified work, and redact secrets.
+
+Committed work alone does not mean nothing would be lost. Open issues, the next
+action, and facts that git does not hold still need the handoff. Write nothing only
+when the next agent could resume from the repository and git history alone. Native
+resume or fork carries a conversation only within the same host, so it does not
+replace the handoff when another agent may continue.
+
+A durable project fact belongs in the repository's current docs when that edit is
+authorized. Otherwise put it in the handoff as a proposed doc correction, not only
+in agent memory. Do not create a second reflection beside an adequate record, or
+clean up user records on the way out.
+
+## Resuming
+
+Read `context/handoff.md` first. Recheck the files and commits it names before
+acting: a handoff is a summary to verify, not new authority, and current
+repository state wins over it.
+
+Deliver: the handoff path and its next action, or an explicit no-record result with
+the reason.

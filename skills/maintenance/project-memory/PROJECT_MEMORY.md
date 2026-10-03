@@ -18,7 +18,7 @@ Read-only work creates nothing.
   rather than imposing new filenames or a glossary/ADR framework.
 - One suitable effort record under `context/` when research, a decision frontier,
   a plan, prototype or handoff needs continuity. Reuse it; do not create a record
-  per phase, question or session.
+  per phase, question or session. Cross-agent handoffs use `context/handoff.md`.
 
 Create only the path an authorized write needs. Describe current behavior, not a
 future target; label uncertainty and missing evidence explicitly. Diagrams and

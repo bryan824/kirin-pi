@@ -1,6 +1,6 @@
 ---
 name: delegate
-description: General bounded executor for work not owned by a specialist
+description: Bounded executor for tasks no specialist owns, such as operations or chores (use worker for approved implementation)
 model: openai-codex/gpt-6-astra
 thinking: high
 systemPromptMode: append
