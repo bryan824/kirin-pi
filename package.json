@@ -56,10 +56,7 @@
   },
   "scripts": {
     "kirin-pi": "bun setup.cjs",
-    "test": "bun test ./test/*.test.cjs ./test/*.test.ts ./skills/maintenance/skill-audit/scripts/skill-cleaner.test.ts",
-    "memory:check": "bun skills/maintenance/project-memory/scripts/project-memory.cjs check",
-    "memory:init": "bun skills/maintenance/project-memory/scripts/project-memory.cjs init",
-    "hooks:install": "bun hooks/install.cjs",
+    "test": "bun test ./test/*.test.cjs ./test/*.test.ts ./skills/maintenance/harness/scripts/skill-cleaner.test.ts",
     "pack:dry": "bun pm pack --dry-run"
   }
 }

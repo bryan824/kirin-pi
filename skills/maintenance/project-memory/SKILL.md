@@ -6,23 +6,28 @@ description: "When a repository needs durable agent-readable context — initial
 # Project Memory
 
 Keep current truth in Git and working records out of it. Read [PROJECT_MEMORY.md](PROJECT_MEMORY.md).
-Resolve `SKILL_DIR` to the directory containing this loaded skill before invoking
-its helper, rather than assuming a checkout layout:
+
+**Check** (read-only). A repository is *adopted* when `docs/memory.md` exists.
+Otherwise list existing memory-like roots (`docs/adr`, `docs/decisions`,
+`docs/specs`, `docs/plans`, `context`, `project`) as *detected* leads, not
+permission to migrate them. For an adopted repository confirm:
 
 ```bash
-bun "$SKILL_DIR/scripts/project-memory.cjs" check --root <repo>
-# Only when initialization is authorized:
-bun "$SKILL_DIR/scripts/project-memory.cjs" init --root <repo>
+test -f docs/memory.md && test -f docs/verification.md
+git check-ignore -q context/probe   # exit 0: context/ is effectively ignored
+git ls-files -- context/            # any output: tracked records to report
 ```
 
-Check is read-only. Init creates only required current docs and an effective
-root ignore for `context/`; tracked records remain tracked and must be reported,
-not automatically removed from the index. A non-Git directory cannot be certified
-ignored. Inspect existing path ownership and conventions before initializing.
+**Init**, only when authorized. Inspect existing path types and conventions first;
+stop on a symlink or unexpected type at `docs`, `.gitignore` or either doc. Create
+missing `docs/memory.md` and `docs/verification.md` from the starters in
+PROJECT_MEMORY.md, append its ignore block to the root `.gitignore` when
+`context/` is not already ignored, then rerun the check.
 
-Do not migrate, concatenate or rewrite existing docs automatically. Report
-unknown/legacy roots or ambiguous symlinks for a human decision. Other paths are
-created lazily when authorized work has real content for them.
+Tracked records stay tracked: report them, never unstage or delete them. A
+non-Git directory cannot be certified ignored. Do not migrate, concatenate or
+rewrite existing docs; other paths are created lazily when authorized work has
+real content for them.
 
 Deliver: observed adoption state, created paths, privacy/ignore evidence, and
 remaining decisions. A marker alone is not proof of a complete or private substrate.

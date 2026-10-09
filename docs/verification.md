@@ -10,15 +10,14 @@ authority.
 
 | Command | Evidence and limit |
 |---|---|
-| `bun run test` | Runs repository contracts and analyzer regressions: skill/preset metadata, native AGENTS.md project entry and instruction links, authority wording, installation and generated-memory fixtures, shared command policy, export data protection and inert extension adapters. Static prompts and resolvable pointers do not establish model compliance or successful task navigation. |
+| `bun run test` | Runs repository contracts and analyzer regressions: skill/preset metadata, native AGENTS.md project entry and instruction links, authority wording, installation fixtures, shared command policy, export data protection and inert extension adapters. Static prompts and resolvable pointers do not establish model compliance or successful task navigation. |
 | `bun run pack:dry` | Lists the allowlisted publication surface. Inspect entries for accidental state, missing resources and legal files; this does not publish or verify deployment. |
-| `bun test ./test/extensions.test.ts` | Compiles extension entrypoints with peers external; exercises export artifacts, hook diagnostics, Herdr with fake API/socket calls, and session rendering/accounting with synthetic files and installed width primitives. Covers standalone usage without extra messages. No live model, Herdr server or interactive Pi session is exercised. |
+| `bun test ./test/extensions.test.ts` | Compiles extension entrypoints with peers external; exercises export artifacts, command guards, Herdr with fake API/socket calls, and session rendering/accounting with synthetic files and installed width primitives. Covers standalone usage without extra messages. No live model, Herdr server or interactive Pi session is exercised. |
 | `bun test ./test/harness.test.cjs ./test/setup.test.cjs` | Exercises command/scope isolation, individual skills and packs, both host destinations, collision consent, root/symlink containment, byte preservation, staging/rollback and instruction/settings merging in temporary roots. Pi setup calls use a fake executable. |
-| `bun test ./test/hooks.test.cjs ./test/project-memory.test.cjs` | Exercises argument-position guards, read-only hk assurance, legacy/native-config wiring, disabled/custom-hook preservation, effective Git paths/ignores and ambiguous-path refusal in isolated repositories. hk installation is faked; config-hook cases require Git 2.54+. Neither guard prose nor fixtures constitute shell containment. |
+| `bun test ./test/hooks.test.cjs` | Exercises argument-position guards and the `hk.pkl` integrity configuration. Neither guard prose nor fixtures constitute shell containment. |
 | `hk validate` / `git hook run pre-commit` | Separately validates the real configuration and executes the installed Git hook. Requires the existing hk/Bun tools; the hook runs the full test suite with fixing, staging and stashing disabled. Record native versions and verify index/worktree preservation. |
 | `bun test ./test/chatgpt-export.test.ts` | Shared parser/CLI formatting, code whitespace/entities/fences, metadata and inode-based protection against overwriting the input through aliases. Adapter tests cover the Pi full-output path. Not general browser-DOM equivalence. |
-| `bun skills/maintenance/skill-audit/scripts/skill-cleaner.ts --root skills --root-only --no-logs` | Read-only source inventory, raw-body drift, frontmatter eligibility and conditional character-ratio estimates. Inspect coverage/issues before candidates. This does not measure native selection, loaded context, reference payload, actual tokens or disuse. |
-| `bun run memory:check` | Checks current memory substrate and effective context protection without creating records or altering the index. A non-Git directory cannot be certified private by this check. |
+| `bun skills/maintenance/harness/scripts/skill-cleaner.ts --root skills --root-only --no-logs` | Read-only source inventory, raw-body drift, frontmatter eligibility and conditional character-ratio estimates. Inspect coverage/issues before candidates. This does not measure native selection, loaded context, reference payload, actual tokens or disuse. |
 | `git diff --check` | Detects whitespace errors in the tracked candidate diff, not correctness or completeness. Review new files separately. |
 
 The test script uses explicit `./` paths for the owned tests and analyzer regression.
@@ -44,8 +43,8 @@ growth/update/fix owner, preserving resolved constraints across a handoff, and
 avoiding invented docs or missing-sibling dependencies. Inspect actual decisions/tool traces; a static phrase match,
 grader-only result or another project's test is not behavioral evidence.
 
-For repeatable harness/model reassessment, use the audit's
-[behavior probes](../skills/maintenance/skill-audit/references/BEHAVIOR_PROBES.md).
+For repeatable harness/model reassessment, use the harness skill's
+[behavior probes](../skills/maintenance/harness/references/BEHAVIOR_PROBES.md).
 Keep model and harness comparisons separate. Hand-injected prompts can test
 instruction decisions, not native discovery, loaded defaults or live-host parity.
 A few successful cases do not establish universal model superiority.
@@ -62,13 +61,9 @@ by the analyzer command above.
 - Command guards prevent common accidents, not substitutions, aliases, arbitrary
   shell programs or direct extension subprocesses. Read-only role labels and copied
   worktrees are not sandboxes.
-- Startup hook assurance reports only, without executing hk or evaluating Pkl.
-  Explicit wiring uses the installed hk tool, never installs software or changes
-  global Git settings. The checker recognizes direct native local wiring;
-  other launchers, unknown/disabled hooks, existing sibling hooks and outside/shared
-  destinations are preserved for owner review. Commit-time hook overrides and
-  explicit hk skip assignments are covered by the best-effort command policy,
-  not a sandbox.
+- Git hooks are wired by running `hk install` directly; Kirin neither checks nor
+  installs them. Commit-time hook overrides and explicit hk skip assignments are
+  covered by the best-effort command policy, not a sandbox.
 - Skill swaps roll back selected trees, not newly created parents or later full-setup
   phases. Failed rollback retains recovery paths. Installation roots must not be
   concurrently retargeted. Project installs never silently migrate global copies.

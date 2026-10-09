@@ -58,23 +58,6 @@ test("Pi guard adapters use the same command policy", async () => {
   expect(handlers.get("user_bash")!({ command: allowed })).toBeUndefined();
 });
 
-test("Pi startup requests report-only hook assurance and surfaces warnings", async () => {
-  mock.module("@earendil-works/pi-coding-agent", () => coreStub);
-  const { default: register } = await import("../extensions/guardrails.ts");
-  const handlers = new Map<string, Function>(), calls: any[] = [], warnings: string[] = [];
-  register({ on: (name: string, fn: Function) => handlers.set(name, fn), exec: async (...args: any[]) => {
-    calls.push(args); return { code: 0, stderr: "fixture hook is not wired\n", stdout: "" };
-  } } as any);
-  const ctx = { cwd: "/fixture", hasUI: true, ui: { notify: (text: string) => warnings.push(text) } };
-  await handlers.get("session_start")!({ reason: "startup" }, ctx);
-  expect(calls).toHaveLength(1);
-  expect(calls[0][1].at(-1)).toBe("--ensure");
-  expect(calls[0][2].cwd).toBe("/fixture");
-  expect(warnings).toEqual(["fixture hook is not wired"]);
-  await handlers.get("session_start")!({ reason: "reload" }, ctx);
-  expect(calls).toHaveLength(1);
-});
-
 function resolvePeer(name: string) {
   // Resolve import-only peers too, locally or from the installed Pi. No install.
   try { return fileURLToPath(import.meta.resolve(name)); }

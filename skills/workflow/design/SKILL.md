@@ -17,15 +17,16 @@ already supply approved intent; do not turn it into another interview.
   against the code before treating it as a fact. Challenge a fashionable solution
   when a simpler one solves the actual problem.
 - Bundle dependency-ready questions into a short round. Include a grounded
-  recommendation and meaningful alternatives; ask separately when one answer
-  would reframe the rest. Do not demand arbitrary option counts or explore every
-  hypothetical branch. Block only work that depends on an unresolved answer.
+  recommendation, worded so a plain yes accepts it, and meaningful alternatives;
+  ask separately when one answer would reframe the rest. Do not demand arbitrary
+  option counts or explore every hypothetical branch. Block only work that depends on an unresolved answer.
 - If someone else holds the answer, establish the recipient and needed outcome,
   then prepare a focused questionnaire. Each question should stand alone, lead
   with what matters most, and welcome partial answers or uncertainty. Do not
   invent the absent person's preference.
-- State the proposed outcome, exclusions, contracts, test seams, assumptions and
-  consequential trade-offs clearly enough to approve. Approval means the user
+- State the proposed outcome, exclusions, contracts, test seams (what each
+  catches and misses), assumptions and consequential trade-offs clearly enough
+  to approve. Approval means the user
   agreed to this direction in context; no magic word is needed, and silence is
   not approval. A material expansion needs fresh approval. If no decision-maker
   is available, report the blocked choice rather than guessing through it.

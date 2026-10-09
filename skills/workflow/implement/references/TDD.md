@@ -32,9 +32,10 @@ real environment. Over-mocking the code being evaluated produces hollow greens.
 ## Strength of evidence
 
 If unsure a regression test detects the bug, run it against the old behavior or
-make a controlled mutation in an isolated fixture. Do not revert user changes to
-demonstrate a failure. Failed setup, swallowed output and skipped assertions are
-not successful reproductions.
+make a controlled mutation in an isolated fixture; diff it against a pristine copy
+to confirm the mutation landed before trusting the failure. Do not revert user
+changes to demonstrate a failure. Failed setup, swallowed output and skipped
+assertions are not successful reproductions.
 
 Choose checks for consequence: invalid input, failure/cancellation, data and
 permission boundaries, and critical user paths. Static compilation does not prove

@@ -63,3 +63,27 @@ not authority; recheck important claims against current artifacts. Redact secret
 Keep requirements, decisions, evidence and blockers in the useful record. Use an
 active runtime's claims/status and artifact handles rather than inventing a second
 execution ledger. A clean result with nothing to carry forward writes nothing.
+
+## Starters
+
+`docs/memory.md` — the adoption marker; keep it this short and add only real routes:
+
+```markdown
+# Project Memory
+
+Status: adopted
+
+Current truth lives in its owning doc, linked from the repository instructions.
+Working evidence goes in one ignored effort record under `context/`; cross-agent
+handoffs go in `context/handoff.md`. Detected roots at adoption: <list or none>.
+```
+
+`docs/verification.md` — fill from the repository's actual scripts and CI:
+
+```markdown
+# Verification
+
+| Command | Evidence and limit |
+|---|---|
+| Pending | Repository commands not yet inspected |
+```

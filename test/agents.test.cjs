@@ -22,6 +22,7 @@ function preset(name) {
   const text = fs.readFileSync(path.join(dir, name), "utf8");
   const match = text.match(/^---\n([\s\S]*?)\n---/);
   assert.ok(match, `${name}: missing frontmatter`);
+  assert.doesNotThrow(() => Bun.YAML.parse(match[1]), `${name}: frontmatter is not valid YAML`);
   const fields = Object.fromEntries(match[1].split("\n").flatMap((line) => {
     const m = line.match(/^([a-z_]+):\s*(.*)$/i);
     return m ? [[m[1], m[2].replace(/^"|"$/g, "")]] : [];

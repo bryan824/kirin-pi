@@ -58,7 +58,7 @@ test("test command runs owned files, not archived namesakes", () => {
     for (const [file, name] of [
       ["test/owned.test.cjs", "owned cjs"],
       ["test/owned.test.ts", "owned ts"],
-      ["skills/maintenance/skill-audit/scripts/skill-cleaner.test.ts", "owned analyzer"],
+      ["skills/maintenance/harness/scripts/skill-cleaner.test.ts", "owned analyzer"],
     ]) write(file, `const {test}=require("bun:test"); test(${JSON.stringify(name)},()=>console.log(${JSON.stringify(`RAN ${name}`)}));\n`);
     write("context/archive/test/owned.test.cjs", 'throw new Error("ARCHIVED_TEST_MUST_NOT_RUN");\n');
     const result = spawnSync("bun", ["run", "test"], { cwd: dir, encoding: "utf8", timeout: 15_000 });
@@ -115,7 +115,7 @@ test("README documents Claude native-equivalent boundaries", () => {
 test("working records, runtime artifacts, and local installed copies stay untracked", () => {
   for (const record of [
     "context/plans/probe.md", ".pi/subagents/artifacts/probe",
-    ".agents/skills/skill-audit/SKILL.md", ".claude/skills/skill-audit/SKILL.md",
+    ".agents/skills/harness/SKILL.md", ".claude/skills/harness/SKILL.md",
   ]) {
     const result = spawnSync("git", ["-c", "core.excludesFile=/dev/null", "check-ignore", record], { cwd: root });
     assert.equal(result.status, 0, record);
@@ -166,9 +166,7 @@ test("upstream checkpoints are separate from retained provenance", () => {
   }
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
   const maintenance = readme.split("## Maintaining the harness\n")[1].split("## Development\n")[0];
-  assert.match(maintenance, /user-approved checkpoint-only ledger update/);
-  assert.match(maintenance, /Incomplete sources never advance/);
-  assert.match(maintenance, /Run the audit analyzer first/);
+  assert.ok(maintenance.includes("](skills/maintenance/harness/SKILL.md)"), "maintenance routes to the harness skill");
 });
 
 test("required legal and current-truth docs exist", () => {

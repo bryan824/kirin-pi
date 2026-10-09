@@ -26,7 +26,9 @@ step for every bounded request.
   code may express a real contract.
 - Only ready file-disjoint units may run concurrently through the active
   orchestration runtime. Serialize shared files/contracts and resolve integration
-  ownership. A preparatory refactor or migration phase earns a unit only when it
+  ownership. A worktree holds only tracked files: a check that needs ignored
+  fixtures, local data or credentials runs in the main checkout or is reported
+  unrun. A preparatory refactor or migration phase earns a unit only when it
   removes an actual execution risk.
 - Keep intent and dependency structure here; use the runtime's claims and status
   rather than maintaining a duplicate execution store. Preserve exact run,

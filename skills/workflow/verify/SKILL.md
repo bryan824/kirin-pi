@@ -22,9 +22,10 @@ needs permission too. Report a blocked check or ask, rather than writing.
   Resolve material scope or authority questions before passing.
 - Keep **Spec** and **Standards** separate. Spec covers behavior, contracts,
   completeness, scope and acceptance. Standards covers repository rules,
-  correctness, security, reliability and maintenance. Use fresh independent
-  reviewers when authorized and available; otherwise do separate passes yourself
-  and say so. [SMELLS](references/SMELLS.md) lists contextual review leads.
+  correctness, security, reliability and maintenance; find every repository file
+  that documents how code should be written, and cite the rule a finding breaks.
+  Use fresh independent reviewers when authorized and available; otherwise do
+  separate passes yourself and say so. [SMELLS](references/SMELLS.md) lists contextual review leads.
 - Read intent and tests, then trace implementation, callers, configuration and
   failure paths. Check what tests actually import and assert. Separate missing
   evidence from impossibility, and unclear scope from a proven scope violation.

@@ -11,7 +11,7 @@ const ALLOWED_FIELDS = new Set([
 ]);
 const EXPECTED = {
   workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "prototype", "research", "survey", "verify", "wait-what"],
-  maintenance: ["agents-md", "project-memory", "session-close", "skill-audit", "write-skill"],
+  maintenance: ["agents-md", "project-memory", "retro", "session-close", "harness", "write-skill"],
   domain: ["apple-interface", "chatgpt-export", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
 
@@ -45,7 +45,7 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 30);
+  assert.equal(skillFiles().length, 31);
 });
 
 test("README documents the exact approved skill fleet", () => {
@@ -70,6 +70,7 @@ test("skills use Pi-compatible frontmatter and directory-matched names", () => {
     assert.equal(parsed.name, path.basename(path.dirname(file)), rel);
     assert.match(parsed.name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, rel);
     assert.ok(parsed.description, `${rel}: missing description`);
+    assert.doesNotThrow(() => Bun.YAML.parse(frontmatter[1]), `${rel}: frontmatter is not valid YAML`);
     assert.ok(parsed.description.replace(/^["']|["']$/g, "").length <= 1024, rel);
     for (const key of Object.keys(parsed)) assert.ok(ALLOWED_FIELDS.has(key), `${rel}: ${key}`);
   }
@@ -100,7 +101,7 @@ test("only approved user-invoked skills disable automatic selection", () => {
       ? [path.basename(path.dirname(file))]
       : [];
   }).sort();
-  assert.deepEqual(explicit, ["agents-md", "teach", "wait-what"]);
+  assert.deepEqual(explicit, ["agents-md", "retro", "teach", "wait-what"]);
 });
 
 // Structural contracts and a few safety boundaries. Exact prose is deliberately
@@ -116,31 +117,33 @@ test("agents-md stays user-triggered and owns only AGENTS.md", () => {
   assert.doesNotMatch(text, /CLAUDE\.md|@AGENTS\.md/);
 });
 
-test("upstream review is gated inside the existing audit skill", () => {
-  assert.match(read("maintenance/skill-audit/SKILL.md"), /\[Upstream review\]\(references\/UPSTREAM_REVIEW\.md\)/);
-  const upstream = read("maintenance/skill-audit/references/UPSTREAM_REVIEW.md");
-  assert.match(upstream, /approval before any harness or ledger edit/);
-  assert.doesNotMatch(upstream, /https?:\/\//);
-});
-
-test("whole-harness review and repeatable probes stay within the existing audit", () => {
-  const audit = read("maintenance/skill-audit/SKILL.md");
-  const harness = read("maintenance/skill-audit/references/HARNESS_REVIEW.md");
-  const upstream = read("maintenance/skill-audit/references/UPSTREAM_REVIEW.md");
-  for (const file of ["HARNESS_REVIEW.md", "BEHAVIOR_PROBES.md"]) {
-    assert.ok(audit.includes(`](references/${file})`), file);
+test("harness review owns approval, native-host checks and probes", () => {
+  const skill = read("maintenance/harness/SKILL.md");
+  for (const file of ["REVIEW.md", "BEHAVIOR_PROBES.md"]) {
+    assert.ok(skill.includes(`](references/${file})`), file);
   }
-  for (const text of [harness, upstream]) assert.ok(text.includes("](BEHAVIOR_PROBES.md)"));
-  const probes = read("maintenance/skill-audit/references/BEHAVIOR_PROBES.md");
-  assert.match(harness, /latest stable \*\*Pi and Claude Code\*\*/);
-  const cases = [...probes.matchAll(/^\| ([MUVTW]\d+) —/gm)].map((match) => match[1]);
-  assert.deepEqual(cases, ["M1", "M2", "M3", "M4", "U1", "U2", "U3", "U4", "U5", "U6", "U7", "U8", "T1", "W1", "V1"]);
+  const review = read("maintenance/harness/references/REVIEW.md");
+  assert.ok(review.includes("](BEHAVIOR_PROBES.md)"));
+  assert.match(review, /approval before any\s+harness or ledger edit/);
+  assert.match(review, /latest stable \*\*Pi and Claude Code\*\*/);
+  assert.doesNotMatch(review, /https?:\/\//);
+  const probes = read("maintenance/harness/references/BEHAVIOR_PROBES.md");
+  const cases = [...probes.matchAll(/^\| ([MUVTWRC]\d+) —/gm)].map((match) => match[1]);
+  assert.deepEqual(cases, ["M1", "M2", "M3", "M4", "U1", "U2", "U3", "U4", "U5", "U6", "U7", "U8", "T1", "W1", "C1", "R1", "V1"]);
 });
 
 test("wait-what stays a small user-invoked conversation repair", () => {
   const text = read("workflow/wait-what/SKILL.md");
   assert.match(text, /no files, learning workspace or teaching mode unless requested/);
+  assert.match(text, /strict ASD-STE100/);
   assert.doesNotMatch(text, /\]\([^)]+\.md\)/, "no required sibling or glossary dependency");
+});
+
+test("retro stays user-invoked, traced and propose-only", () => {
+  const text = read("maintenance/retro/SKILL.md");
+  assert.match(text, /disable-model-invocation:\s*true/);
+  assert.match(text, /Drop any candidate you cannot trace/);
+  assert.match(text, /Edit nothing until the user picks/);
 });
 
 test("teach defaults to chat and gates persistent course output", () => {
@@ -168,10 +171,12 @@ test("charter and skills keep the authority and verdict contracts", () => {
     /failed delegated task stays failed/,
     /self-review that says so/,
     /explanatory files.*explicit approval/,
+    /Google developer documentation style, about 80% of the way to ASD-STE100/,
+    /Keep articles and helper words/,
   ]) assert.match(WORKFLOW, rule);
   assert.match(read("workflow/verify/SKILL.md"), /VERDICT: PASS \| PASS_WITH_RISKS \| FAIL/);
   assert.match(read("workflow/design/SKILL.md"), /references\/DECISIONS\.md/);
-  for (const name of ["maintenance/project-memory", "maintenance/skill-audit"]) {
+  for (const name of ["maintenance/harness"]) {
     const text = read(`${name}/SKILL.md`);
     assert.match(text, /SKILL_DIR/, name);
     assert.doesNotMatch(text, /bun skills\/maintenance\//, name);
