@@ -35,7 +35,6 @@
     "hooks",
     "skills",
     "docs",
-    "chatgpt-export.ts",
     "guard-policy.cjs",
     "setup.cjs",
     "README.md",

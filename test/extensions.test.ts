@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { linkSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import os from "node:os";
@@ -15,7 +15,6 @@ const coreStub = {
   truncateTail: (content: string) => ({ content, truncated: false }),
 };
 const entrypoints = [
-  "chatgpt-export.ts",
   "guardrails.ts",
   "herdr/index.ts",
   "session-breakdown.ts",
@@ -71,53 +70,6 @@ function resolvePeer(name: string) {
 function requirePeer(name: string) {
   return createRequire(import.meta.url)(resolvePeer(name));
 }
-
-test("ChatGPT adapter shares input-alias protection and preserves full output artifacts", async () => {
-  const typebox = requirePeer("typebox");
-  mock.module("typebox", () => typebox);
-  mock.module("@earendil-works/pi-ai", () => ({ StringEnum: (values: string[]) => ({ type: "string", enum: values }) }));
-  const queued: string[] = [];
-  let truncated = false;
-  mock.module("@earendil-works/pi-coding-agent", () => ({
-    ...coreStub,
-    withFileMutationQueue: (file: string, run: () => unknown) => { queued.push(file); return run(); },
-    truncateHead: (content: string) => ({ content: truncated ? content.slice(0, 5) : content, truncated,
-      outputLines: 1, totalLines: 2, outputBytes: 5, totalBytes: content.length }),
-  }));
-  const { default: extension } = await import("../extensions/chatgpt-export.ts");
-  const { parseChatGptExportHtml, renderExport } = await import("../chatgpt-export.ts");
-  const dir = mkdtempSync(path.join(os.tmpdir(), "kirin-export-tool-"));
-  const oldTmp = process.env.TMPDIR;
-  try {
-    process.env.TMPDIR = dir; // Automatic artifacts stay inside this fixture too.
-    const input = path.join(dir, "chat.html");
-    const html = '<article data-message-author-role="assistant"><pre><code>    a  b &lt;tag&gt;\n</code></pre></article>';
-    writeFileSync(input, html);
-    symlinkSync(input, path.join(dir, "link.html"));
-    linkSync(input, path.join(dir, "hard.html"));
-    let tool: any;
-    extension({ registerTool: (value: any) => { tool = value; } } as any);
-    const run = (outputPath?: string) => tool.execute("fixture", { path: "@chat.html", format: "json", outputPath }, undefined, undefined, { cwd: dir });
-    for (const target of [input, "link.html", "hard.html"]) {
-      await expect(run(target)).rejects.toThrow(/input/);
-      expect(readFileSync(input, "utf8")).toBe(html);
-    }
-    const explicit = await run("@out/result.json");
-    const expected = renderExport(parseChatGptExportHtml(html, input), "json");
-    expect(readFileSync(explicit.details.outputPath, "utf8")).toBe(expected);
-    expect(queued).toContain(path.join(dir, "out/result.json"));
-    truncated = true;
-    const automatic = await run();
-    expect(path.dirname(automatic.details.outputPath).startsWith(dir + path.sep)).toBe(true);
-    expect(readFileSync(automatic.details.outputPath, "utf8")).toBe(expected);
-    expect(automatic.content[0].text).toContain("Full output saved to:");
-    expect(automatic.details.truncation.truncated).toBe(true);
-    expect(readFileSync(input, "utf8")).toBe(html);
-  } finally {
-    if (oldTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = oldTmp;
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 async function herdrFixture(checkActivation = false) {
   const TypeBox = requirePeer("typebox");

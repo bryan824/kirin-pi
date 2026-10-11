@@ -5,7 +5,8 @@ description: "When structure is the problem — improve an existing architecture
 
 # Architecture
 
-Choose a better system shape before designing implementation details. No edits.
+Choose a better system shape before designing implementation details. Keep repository
+files unchanged. Write a report file only when the user requests one.
 
 First name the posture:
 
@@ -22,10 +23,37 @@ For either posture:
 - A seam earns its cost through caller leverage, maintenance locality, a trust boundary or testability—not an implementation count. One adapter can isolate a real dependency; speculative variation is not a reason to add one.
 - Prefer a change proven through one behavior seam. Relocated complexity is not improvement.
 
-For **Improve**, rank evidence-backed candidates by leverage versus blast radius and recommend one.
+For **Improve**, rank evidence-backed candidates by leverage versus blast radius. Recommend one only when evidence supports a change; no worthwhile candidate is a valid result.
 
 For **Rethink**, produce a target model, a kill list, assumptions, and falsifiers. Keep inherited pieces only when evidence says they still earn their place.
 
-Compare alternatives only when the interface choice matters. Lead with the recommendation and name the fragile assumption.
+Compare alternative interfaces only when that choice matters. Lead with the recommendation and name the fragile assumption.
 
-Deliver: posture, current constraints, recommended architecture, what disappears, contract/test impact, risks, and next step (`design` for unresolved behavior choices, otherwise `plan`). Stop before implementation.
+## Optional discovery and report mode
+
+Use this mode when the user asks for improvement candidates before choosing a refactor.
+Do not require it for an already chosen change.
+
+1. Scope to the upcoming change or named pain point. Otherwise, inspect recent history
+   for frequently changed areas, then confirm friction in current callers and tests.
+   Churn alone is not evidence of a defect.
+2. Present a small set of distinct candidates, or none; do not fill a quota.
+   Each cites paths and a concrete caller/test trace, shows a compact before/after
+   diagram, and explains what changes or disappears. Include contract/test impact,
+   dependency limits, blast radius, confidence, and assumptions. Describe changed
+   responsibilities, not proposed interfaces.
+3. Default to a compact chat report. If the user requests HTML, create a uniquely
+   named static file in the OS temp directory, outside the repository. Provide its
+   absolute path.
+   Use inline CSS/SVG with escaped text, no scripts or external resources.
+   Check its rendering with available browser tooling; otherwise disclose that
+   rendering is unverified.
+4. For report-only requests, stop without an interview. Otherwise, ask which candidate
+   to explore, including none, and wait. Use the host's structured question tool when
+   available. Selection permits discussion, not edits. Explore only the chosen candidate.
+
+For unresolved behavior choices, use `design` when available; otherwise ask directly.
+Use `plan` only when dependencies, risk, or handoff require it.
+
+Deliver: posture, current constraints, candidate report or recommended architecture,
+what disappears, contract/test impact, risks, and next step. Stop before implementation.

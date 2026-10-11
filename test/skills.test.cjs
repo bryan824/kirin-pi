@@ -4,6 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
+const { parse, SKILL_PACKS } = require("../setup.cjs");
 const skillsDir = path.join(root, "skills");
 const ALLOWED_FIELDS = new Set([
   "name", "description", "license", "compatibility", "metadata",
@@ -12,7 +13,7 @@ const ALLOWED_FIELDS = new Set([
 const EXPECTED = {
   workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "prototype", "research", "survey", "verify", "wait-what"],
   maintenance: ["agents-md", "project-memory", "retro", "session-close", "harness", "write-skill"],
-  domain: ["apple-interface", "chatgpt-export", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
+  domain: ["apple-interface", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
 
 function skillFiles() {
@@ -45,14 +46,34 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 31);
+  assert.equal(skillFiles().length, 30);
+});
+
+test("README provides valid copyable commands for every skill and bundle", () => {
+  const md = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  const rows = [...md.matchAll(/^\| \x60([^\x60]+)\x60 \| .+ \|\s*\x60bun run kirin-pi install ([^\x60]+)\x60 \|$/gm)];
+  const skills = skillFiles().map((file) => path.basename(path.dirname(file))).sort();
+  assert.deepEqual(rows.map((row) => row[1]).sort(), skills);
+  for (const [, name, command] of rows) {
+    const options = parse(["install", ...command.split(" ")], root);
+    assert.deepEqual(options.skills, [name]);
+  }
+  for (const bundle of Object.keys(SKILL_PACKS)) {
+    assert.ok(md.includes("\u0060bun run kirin-pi install " + bundle + "\u0060"), bundle);
+  }
+  const tableCommands = [...md.matchAll(/\| \x60bun run kirin-pi ([^\x60]+)\x60 \|/g)];
+  assert.ok(tableCommands.length > skills.length);
+  for (const [, command] of tableCommands) assert.doesNotThrow(() => parse(command.split(" "), root), command);
+  const diagrams = [...md.matchAll(/\x60{3}mermaid\n([\s\S]+?)\x60{3}/g)];
+  assert.equal(diagrams.length, 2);
+  assert.match(diagrams[1][1], /\.->/);
 });
 
 test("README documents the exact approved skill fleet", () => {
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
   for (const [group, names] of Object.entries(EXPECTED)) {
     const heading = `${group[0].toUpperCase()}${group.slice(1)} skills`;
-    const section = readme.match(new RegExp(`### ${heading}\\n\\n\\| Skill \\| Purpose \\|\\n\\|---\\|---\\|\\n((?:\\|.*\\n)+)`));
+    const section = readme.match(new RegExp(`### ${heading}\\n\\n\\| Skill \\| Purpose \\| Install command \\|\\n\\|---\\|---\\|---\\|\\n((?:\\|.*\\n)+)`));
     assert.ok(section, heading);
     const actual = [...section[1].matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]).sort();
     assert.deepEqual(actual, names.slice().sort(), group);

@@ -17,13 +17,19 @@ function filesUnder(dir) {
 }
 
 test("executable integration lives at the root with no wrapper directory", () => {
-  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs"]) {
+  for (const name of ["agents", "extensions", "hooks", "skills", "docs", "test", "guard-policy.cjs", "setup.cjs"]) {
     assert.equal(fs.existsSync(path.join(root, name)), true, name);
   }
   for (const name of ["harness", "scripts", "intercepted-commands", "agent-sync.cjs", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"]) {
     assert.equal(fs.existsSync(path.join(root, name)), false, name);
   }
   assert.equal(fs.existsSync(path.join(root, "docs", "decisions")), false);
+});
+
+test("retired export parser, adapter and skill are absent from active sources", () => {
+  for (const relative of ["chatgpt-export.ts", "extensions/chatgpt-export.ts", "skills/domain/chatgpt-export", "test/chatgpt-export.test.ts"]) {
+    assert.equal(fs.existsSync(path.join(root, relative)), false, relative);
+  }
 });
 
 test("package uses native Pi resources and a strict publication allowlist", () => {
@@ -37,7 +43,7 @@ test("package uses native Pi resources and a strict publication allowlist", () =
   assert.equal(packageJson.packageManager, "bun@1.4.2");
   assert.deepEqual(packageJson.files, [
     "agents", "extensions", "hooks", "skills", "docs",
-    "chatgpt-export.ts", "guard-policy.cjs", "setup.cjs",
+    "guard-policy.cjs", "setup.cjs",
     "README.md", "LICENSE", "LICENSE-APACHE",
   ]);
   assert.equal(packageJson.dependencies, undefined);
@@ -77,7 +83,6 @@ test("upstream repository references stay in the ledger", () => {
     ...filesUnder(path.join(root, "extensions")),
     ...filesUnder(path.join(root, "hooks")),
     ...filesUnder(path.join(root, "skills")),
-    path.join(root, "chatgpt-export.ts"),
     path.join(root, "guard-policy.cjs"),
     path.join(root, "setup.cjs"),
     path.join(root, "AGENTS.md"),
