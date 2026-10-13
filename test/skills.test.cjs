@@ -11,8 +11,8 @@ const ALLOWED_FIELDS = new Set([
   "allowed-tools", "disable-model-invocation",
 ]);
 const EXPECTED = {
-  workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "prototype", "research", "survey", "verify", "wait-what"],
-  maintenance: ["agents-md", "project-memory", "retro", "session-close", "harness", "write-skill"],
+  workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "project-memory", "prototype", "research", "session-close", "survey", "verify", "wait-what"],
+  maintenance: ["agents-md", "retro", "harness", "write-skill"],
   domain: ["apple-interface", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
 
@@ -220,7 +220,7 @@ test("Herdr guidance keeps its activation and destructive-command boundaries", (
 
 test("handoffs use one shared, ignored repository path", () => {
   const { WORKFLOW } = require("../setup.cjs");
-  const close = read("maintenance/session-close/SKILL.md");
+  const close = read("workflow/session-close/SKILL.md");
   for (const text of [WORKFLOW, close]) assert.match(text, /context\/handoff\.md/);
   assert.match(close, /git check-ignore/);
   assert.match(close, /agent-private/i);

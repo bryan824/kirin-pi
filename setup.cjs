@@ -73,8 +73,13 @@ const WORKFLOW = [
   "Before handoff, verify the complete change against the user's requirements: independently when possible,",
   "otherwise as a separate self-review that says so. Report checks you did not run.",
   "Commit or publish only with explicit authority.",
-  "Write a handoff only when work must resume or a durable lesson would otherwise be lost.",
-  "Handoffs go in the repo's git-ignored context/handoff.md, never only in agent-private memory.",
+  "When a task needs notes that outlive the session, keep them in one git-ignored context/<effort>.md,",
+  "with decisions as they settle. When the work is approved or finished, move the decisions that stay true",
+  "and that the code does not show (with their reasons, explicit no-s and constraints) to tracked docs/decisions.md.",
+  "Read docs/decisions.md, when it exists, before you change or reopen a design choice.",
+  "Write a handoff only when work must resume. It goes in git-ignored context/handoff.md and links to those",
+  "notes instead of holding decisions. Keep neither only in agent-private memory.",
+  "If Git does not ignore context/, use the project-memory skill before the first write there.",
   END,
 ].join("\n");
 

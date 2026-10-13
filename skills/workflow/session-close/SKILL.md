@@ -17,14 +17,17 @@ anything it needs.
 
 - Check that the file is git-ignored (`git check-ignore -q context/handoff.md`).
   If it is not, ask before writing it; do not change ignore rules unasked.
-- The file holds the current handoff, not a log. Update it in place. If it already
-  describes different unfinished work, ask before replacing it.
-- If an existing record under `context/` already covers this work, link to it from
+- The file holds the current handoff, not a log and not the task's working notes.
+  Update it in place. If it already describes different unfinished work, ask before
+  replacing it.
+- Decisions recorded during the task belong in its working notes, one ignored
+  `context/<effort>.md`. If such a record already covers this work, link to it from
   the handoff instead of copying it.
 
 ## What it holds
 
-Approved scope; decisions, including explicit no-s and their reasons; changed files
+Approved scope; a link to the working notes, plus any decision, explicit no or
+reason that no other record holds; changed files
 and whether they are committed; verification evidence and unrun checks; open issues
 and blockers; worktree or run identities; and the exact next action. Link existing
 artifacts rather than copying them, and check the next agent can reach the paths.

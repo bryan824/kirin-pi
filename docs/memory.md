@@ -16,6 +16,8 @@ not proof that the contents are correct, current or private.
 - `docs/UPSTREAM_LEDGER.md` — sole third-party relationships, borrowing provenance,
   review checkpoints and legal notices. A reviewed source is not necessarily an
   accepted checkpoint, an adopted feature or a deployed update.
+- `docs/decisions.md` — current decisions that the code does not show, each with its
+  reason and what would reopen it.
 - `docs/memory.md` — this routing rule. Add another owning doc only when useful
   current knowledge has no adequate home.
 
@@ -23,14 +25,15 @@ Use the maintenance map for growth/update/fix guidance, not a second maintainer
 handbook here. Portable technique stays in skills; repository facts stay here.
 Agreed vocabulary belongs beside the contract it clarifies; create a glossary
 only when naming ambiguity warrants one. Record consequential, surprising decisions
-with their reason and what would reopen them. A temporary deferral is not a permanent
+in `docs/decisions.md` with their reason and what would reopen them. A temporary deferral is not a permanent
 rejection. Revise superseded claims; do not accumulate contradictory instructions.
 
 ## Working evidence — ignored
 
-Reuse one suitable effort record under `context/` when continuity needs it. A handoff
-between sessions or agents goes in `context/handoff.md`, which every host can read;
-agent-private memory is not a handoff. Existing
+Reuse one effort record, `context/<effort>.md`, when continuity needs it. It is the
+task's working notes: decisions go there as they settle. A handoff between sessions
+or agents goes in `context/handoff.md`, which every host can read; it links to the
+effort record and does not hold its decisions. Agent-private memory is not a handoff. Existing
 plans, research, prototypes, decision records and session notes remain valid; no
 fixed folder or parallel session memo is required. The delegation runtime owns
 its mission/run artifacts under ignored `.pi/subagents/`, not a duplicate task store.

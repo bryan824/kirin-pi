@@ -36,9 +36,9 @@ function syncProjectSkills(project, packs, checkout, operations) {
 
 const WORKFLOW_SKILLS = [
   "architecture", "commit", "debug", "design", "implement",
-  "plan", "prototype", "research", "survey", "verify", "wait-what",
+  "plan", "project-memory", "prototype", "research", "session-close", "survey", "verify", "wait-what",
 ];
-const MAINTENANCE_SKILLS = ["agents-md", "project-memory", "retro", "session-close", "harness", "write-skill"];
+const MAINTENANCE_SKILLS = ["agents-md", "retro", "harness", "write-skill"];
 const SHARED_SKILLS = [...WORKFLOW_SKILLS, "herdr"].sort();
 
 function tempDir(prefix = "kirin-setup-") {

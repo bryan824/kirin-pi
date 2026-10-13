@@ -36,7 +36,8 @@ already supply approved intent; do not turn it into another interview.
   settle the choice more cheaply than discussion.
 
 For dependent choices spanning sessions, use [Decision frontier](references/DECISIONS.md)
-inside the task's existing working notes. When continuity needs it and writing is authorized,
+inside the task's existing working notes (one ignored `context/<effort>.md`),
+never the handoff file. When continuity needs it and writing is authorized,
 capture settled constraints, explicit no-s, ordering/numeric requirements and their
 reasons as they land, not only in a final summary. Put agreed terms beside the
 contract they clarify; a glossary is not a spec. No per-question record, glossary,

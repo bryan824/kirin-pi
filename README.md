@@ -68,6 +68,7 @@ flowchart TB
   build["Deliver or fix approved behavior<br/>plan when needed · implement · debug"]
   review["Check and save the change<br/>verify · commit only when authorized"]
   clarity["Re-explain a confusing message<br/>wait-what"]
+  memory["Prepare agent memory and leave a handoff<br/>project-memory · session-close"]
   evidence -. "inform decisions" .-> discover
   discover -. "approved work" .-> build
   build -. "complete candidate" .-> review
@@ -82,7 +83,7 @@ flowchart TB
 
   subgraph maintenance["Kirin checkout maintenance"]
     shape["Harness and prompt quality<br/>harness · write-skill"]
-    memory["Repository context and continuity<br/>agents-md · project-memory · session-close"]
+    continuity["Repository instruction entry point<br/>agents-md"]
     retro["Traced environment improvements<br/>retro"]
   end
   control["Explicit Herdr control<br/>herdr"]
@@ -103,8 +104,10 @@ Use `setup` for a full global update, rather than updating workflow skills one b
 | `design` | Set goals, non-goals, contracts, trade-offs, and explicit approval. | `bun run kirin-pi install design` |
 | `implement` | Deliver authorized ready work within its outcome and file boundaries. | `bun run kirin-pi install implement` |
 | `plan` | Organize consequential execution dependencies, evidence and rollback. | `bun run kirin-pi install plan` |
+| `project-memory` | Initialize/check minimal committed `docs/` + ignored `context/`. | `bun run kirin-pi install project-memory` |
 | `prototype` | Test a scoped logic/UI question with safe, reproducible evidence and human choice. | `bun run kirin-pi install prototype` |
 | `research` | Answer one external question from primary sources. | `bun run kirin-pi install research` |
+| `session-close` | Leave the next agent a handoff in shared `context/handoff.md`, or nothing if nothing would be lost. | `bun run kirin-pi install session-close` |
 | `survey` | Map current repository behavior without editing. | `bun run kirin-pi install survey` |
 | `verify` | Independently judge complete candidate on Spec and Standards. | `bun run kirin-pi install verify` |
 | `wait-what` | Explicitly re-explain a confusing point with the missing context, in strict ASD-STE100. | `bun run kirin-pi install wait-what` |
@@ -115,9 +118,7 @@ Use `setup` for a full global update, rather than updating workflow skills one b
 |---|---|---|
 | `agents-md` | Explicitly create or repair a minimal AGENTS.md. | `bun run kirin-pi install agents-md` |
 | `harness` | Assess, reorganize or redesign this harness across every layer, and absorb upstream designs; propose before editing. | `bun run kirin-pi install harness` |
-| `project-memory` | Initialize/check minimal committed `docs/` + ignored `context/`. | `bun run kirin-pi install project-memory` |
 | `retro` | Explicitly look back on a session and propose traced environment fixes: pointers, checks, standards, access. | `bun run kirin-pi install retro` |
-| `session-close` | Leave the next agent a handoff in shared `context/handoff.md`, or nothing if nothing would be lost. | `bun run kirin-pi install session-close` |
 | `write-skill` | Create or simplify one sharp skill. | `bun run kirin-pi install write-skill` |
 
 ### Domain skills
@@ -201,9 +202,9 @@ unless you add `--project /path/to/project`.
 
 | Use case | Command | Scope and contents |
 |---|---|---|
-| Full global update | `bun run kirin-pi setup` | All 11 workflow skills, herdr, charter, Claude guard, and Pi packages. |
+| Full global update | `bun run kirin-pi setup` | All 13 workflow skills, herdr, charter, Claude guard, and Pi packages. |
 | Workflow copies only | `bun run kirin-pi install workflow` | Global; all workflow skills. No settings or package updates. |
-| Maintain this harness | `bun run kirin-pi install maintenance` | Project; all six maintenance skills. Use in this Kirin checkout. |
+| Maintain this harness | `bun run kirin-pi install maintenance` | Project; all four maintenance skills. Use in this Kirin checkout. |
 | Web interfaces | `bun run kirin-pi install frontend` | Project; all nine frontend and Apple-interface skills. |
 | Rust conventions | `bun run kirin-pi install rust` | Project; rust. |
 | Python conventions | `bun run kirin-pi install python` | Project; python-tooling. |
@@ -259,7 +260,8 @@ The Herdr application is a separate system install.
 
 `AGENTS.md` is the compact project entry point, loaded natively. Current durable
 truth lives in owning docs; follow [memory routing](docs/memory.md) when preserving
-decisions or evidence. Reuse one ignored effort record in `context/` when
+decisions or evidence. Decisions that the code does not show go in tracked
+`docs/decisions.md`. Reuse one ignored effort record, `context/<effort>.md`, when
 continuity needs it; otherwise write nothing. The `project-memory` skill checks or
 initializes this split with plain Git commands.
 

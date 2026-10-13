@@ -1,7 +1,8 @@
 # Project Memory
 
 Keep stable current truth in committed `docs/`; keep an effort's working evidence
-in ignored `context/`. Prefer existing repository conventions over another tree.
+in ignored `context/`. The paths below for decisions, working notes and handoffs
+are the same in every repository; other docs follow existing repository conventions.
 
 `docs/memory.md` marks adoption, not correctness. No marker/roots is **absent**;
 existing memory-like roots without that marker are **detected**, not permission
@@ -13,12 +14,15 @@ Read-only work creates nothing.
 - `docs/memory.md` and `docs/verification.md`: adoption and verification truth.
 - Existing repository instructions: a compact entry point for purpose, ownership,
   essential constraints/checks and conditional pointers, not the memory store.
-- Optional owning docs: contracts, architecture, vocabulary, known issues or a
-  consequential decision whose rationale must survive. Reuse established homes
-  rather than imposing new filenames or a glossary/ADR framework.
-- One suitable effort record under `context/` when research, a decision frontier,
-  a plan, prototype or handoff needs continuity. Reuse it; do not create a record
-  per phase, question or session. Cross-agent handoffs use `context/handoff.md`.
+- `docs/decisions.md`: consequential, surprising decisions that the code does not
+  show, each with its reason and what would reopen it. Create it with the first such
+  decision. It holds current decisions, not a log: revise or remove a superseded entry.
+- Optional owning docs: contracts, architecture, vocabulary or known issues. Reuse
+  established homes rather than imposing new filenames or a glossary framework.
+- One effort record, `context/<effort>.md`, when research, a decision frontier, a
+  plan or a prototype needs continuity. It is the task's working notes. Reuse it; do
+  not create a record per phase, question or session. Cross-agent handoffs use
+  `context/handoff.md`, which links to the record and does not hold its decisions.
 
 Create only the path an authorized write needs. Describe current behavior, not a
 future target; label uncertainty and missing evidence explicitly. Diagrams and
@@ -40,7 +44,7 @@ plans in the effort record. Do not turn assumptions into standing instructions.
 
 Define agreed domain terms when ambiguity affects a contract; a glossary is not
 a transcript or spec. Keep surprising, consequential trade-offs with their reason
-and reopen condition. Distinguish rejection from temporary deferral. Update or
+and reopen condition in `docs/decisions.md`. Distinguish rejection from temporary deferral. Update or
 supersede stale claims instead of layering contradictory rules. A new document
 needs a real reader and content, not a slot in a prescribed tree.
 
@@ -74,8 +78,10 @@ execution ledger. A clean result with nothing to carry forward writes nothing.
 Status: adopted
 
 Current truth lives in its owning doc, linked from the repository instructions.
-Working evidence goes in one ignored effort record under `context/`; cross-agent
-handoffs go in `context/handoff.md`. Detected roots at adoption: <list or none>.
+Decisions that the code does not show go in `docs/decisions.md` with their reasons.
+Working notes go in one ignored effort record, `context/<effort>.md`; cross-agent
+handoffs go in `context/handoff.md` and link to it. Detected roots at adoption:
+<list or none>.
 ```
 
 `docs/verification.md` — fill from the repository's actual scripts and CI:
