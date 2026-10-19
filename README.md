@@ -69,6 +69,8 @@ flowchart TB
   review["Check and save the change<br/>verify · commit only when authorized"]
   clarity["Re-explain a confusing message<br/>wait-what"]
   memory["Prepare agent memory and leave a handoff<br/>project-memory · session-close"]
+  retro["Traced environment improvements<br/>retro"]
+  continuity["Repository instruction entry point<br/>agents-md"]
   evidence -. "inform decisions" .-> discover
   discover -. "approved work" .-> build
   build -. "complete candidate" .-> review
@@ -83,8 +85,6 @@ flowchart TB
 
   subgraph maintenance["Kirin checkout maintenance"]
     shape["Harness and prompt quality<br/>harness · write-skill"]
-    continuity["Repository instruction entry point<br/>agents-md"]
-    retro["Traced environment improvements<br/>retro"]
   end
   control["Explicit Herdr control<br/>herdr"]
 ```
@@ -98,6 +98,7 @@ Use `setup` for a full global update, rather than updating workflow skills one b
 
 | Skill | Purpose | Install command |
 |---|---|---|
+| `agents-md` | Explicitly create or repair a minimal AGENTS.md. | `bun run kirin-pi install agents-md` |
 | `architecture` | Compare structural improvements, optionally report candidates, or rethink explicitly. | `bun run kirin-pi install architecture` |
 | `commit` | Group verified changes, stage exact paths, push only when asked. | `bun run kirin-pi install commit` |
 | `debug` | Reproduce, isolate root cause, fix narrowly, prove it. | `bun run kirin-pi install debug` |
@@ -107,6 +108,7 @@ Use `setup` for a full global update, rather than updating workflow skills one b
 | `project-memory` | Initialize/check minimal committed `docs/` + ignored `context/`. | `bun run kirin-pi install project-memory` |
 | `prototype` | Test a scoped logic/UI question with safe, reproducible evidence and human choice. | `bun run kirin-pi install prototype` |
 | `research` | Answer one external question from primary sources. | `bun run kirin-pi install research` |
+| `retro` | Explicitly look back on a session and propose traced environment fixes: pointers, checks, standards, access. | `bun run kirin-pi install retro` |
 | `session-close` | Leave the next agent a handoff in shared `context/handoff.md`, or nothing if nothing would be lost. | `bun run kirin-pi install session-close` |
 | `survey` | Map current repository behavior without editing. | `bun run kirin-pi install survey` |
 | `verify` | Independently judge complete candidate on Spec and Standards. | `bun run kirin-pi install verify` |
@@ -116,9 +118,7 @@ Use `setup` for a full global update, rather than updating workflow skills one b
 
 | Skill | Purpose | Install command |
 |---|---|---|
-| `agents-md` | Explicitly create or repair a minimal AGENTS.md. | `bun run kirin-pi install agents-md` |
 | `harness` | Assess, reorganize or redesign this harness across every layer, and absorb upstream designs; propose before editing. | `bun run kirin-pi install harness` |
-| `retro` | Explicitly look back on a session and propose traced environment fixes: pointers, checks, standards, access. | `bun run kirin-pi install retro` |
 | `write-skill` | Create or simplify one sharp skill. | `bun run kirin-pi install write-skill` |
 
 ### Domain skills
@@ -202,9 +202,9 @@ unless you add `--project /path/to/project`.
 
 | Use case | Command | Scope and contents |
 |---|---|---|
-| Full global update | `bun run kirin-pi setup` | All 13 workflow skills, herdr, charter, Claude guard, and Pi packages. |
+| Full global update | `bun run kirin-pi setup` | All 15 workflow skills, herdr, charter, Claude guard, and Pi packages. |
 | Workflow copies only | `bun run kirin-pi install workflow` | Global; all workflow skills. No settings or package updates. |
-| Maintain this harness | `bun run kirin-pi install maintenance` | Project; all four maintenance skills. Use in this Kirin checkout. |
+| Maintain this harness | `bun run kirin-pi install maintenance` | Project; both maintenance skills. Use in this Kirin checkout. |
 | Web interfaces | `bun run kirin-pi install frontend` | Project; all nine frontend and Apple-interface skills. |
 | Rust conventions | `bun run kirin-pi install rust` | Project; rust. |
 | Python conventions | `bun run kirin-pi install python` | Project; python-tooling. |
@@ -275,7 +275,7 @@ helps other repositories write their own maps.
 | When | Owning guidance |
 |---|---|
 | Assessing, simplifying, reorganizing or redesigning the harness, or absorbing upstream changes | [`harness`](skills/maintenance/harness/SKILL.md); install maintenance here with `bun run kirin-pi install maintenance`, then `/skill:harness <request>` in Pi. |
-| Changing a skill or instruction entry point | [Skill authoring](skills/maintenance/write-skill/SKILL.md); [repository instructions](skills/maintenance/agents-md/SKILL.md) for canonical-file and recovery safeguards. |
+| Changing a skill or instruction entry point | [Skill authoring](skills/maintenance/write-skill/SKILL.md); [repository instructions](skills/workflow/agents-md/SKILL.md) for canonical-file and recovery safeguards. |
 | Updating installed copies | [Install](#install); source edits alone change nothing installed. |
 | Fixing a defect | Trace the owning integration and its callers; [debug](skills/workflow/debug/SKILL.md) owns causal diagnosis, [verification](docs/verification.md) names checks and evidence limits. |
 | Maintaining project knowledge | [Memory routing](docs/memory.md): current facts and rationale in their owner, temporary evidence in the existing effort record. |

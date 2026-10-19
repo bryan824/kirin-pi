@@ -11,8 +11,8 @@ const ALLOWED_FIELDS = new Set([
   "allowed-tools", "disable-model-invocation",
 ]);
 const EXPECTED = {
-  workflow: ["architecture", "commit", "debug", "design", "implement", "plan", "project-memory", "prototype", "research", "session-close", "survey", "verify", "wait-what"],
-  maintenance: ["agents-md", "retro", "harness", "write-skill"],
+  workflow: ["agents-md", "architecture", "commit", "debug", "design", "implement", "plan", "project-memory", "prototype", "research", "retro", "session-close", "survey", "verify", "wait-what"],
+  maintenance: ["harness", "write-skill"],
   domain: ["apple-interface", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
 };
 
@@ -102,7 +102,7 @@ test("skill reference Markdown relative links resolve", () => {
     ...EXPECTED.domain
       .filter((name) => name.startsWith("frontend-") || name === "apple-interface")
       .map((name) => path.join(skillsDir, "domain", name)),
-    ...["design", "plan", "implement", "verify", "prototype"].map((name) => path.join(skillsDir, "workflow", name)),
+    ...["design", "plan", "implement", "verify", "prototype", "retro"].map((name) => path.join(skillsDir, "workflow", name)),
     ...EXPECTED.maintenance.map((name) => path.join(skillsDir, "maintenance", name)),
   ];
   for (const file of dirs.flatMap(markdownFiles)) {
@@ -131,7 +131,7 @@ test("only approved user-invoked skills disable automatic selection", () => {
 const read = (relative) => fs.readFileSync(path.join(skillsDir, relative), "utf8");
 
 test("agents-md stays user-triggered and owns only AGENTS.md", () => {
-  const text = read("maintenance/agents-md/SKILL.md");
+  const text = read("workflow/agents-md/SKILL.md");
   assert.match(text, /disable-model-invocation:\s*true/);
   assert.match(text, /never write through a symlink/);
   assert.match(text, /\.bak/);
@@ -161,7 +161,7 @@ test("wait-what stays a small user-invoked conversation repair", () => {
 });
 
 test("retro stays user-invoked, traced and propose-only", () => {
-  const text = read("maintenance/retro/SKILL.md");
+  const text = read("workflow/retro/SKILL.md");
   assert.match(text, /disable-model-invocation:\s*true/);
   assert.match(text, /Drop any candidate you cannot trace/);
   assert.match(text, /Edit nothing until the user picks/);
