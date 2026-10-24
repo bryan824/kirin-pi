@@ -42,16 +42,12 @@
     "LICENSE-APACHE"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-ai": ">=0.87.1",
     "@earendil-works/pi-coding-agent": ">=0.87.1",
-    "@earendil-works/pi-tui": ">=0.87.1",
-    "typebox": "*"
+    "@earendil-works/pi-tui": ">=0.87.1"
   },
   "peerDependenciesMeta": {
-    "@earendil-works/pi-ai": { "optional": true },
     "@earendil-works/pi-coding-agent": { "optional": true },
-    "@earendil-works/pi-tui": { "optional": true },
-    "typebox": { "optional": true }
+    "@earendil-works/pi-tui": { "optional": true }
   },
   "scripts": {
     "kirin-pi": "bun setup.cjs",

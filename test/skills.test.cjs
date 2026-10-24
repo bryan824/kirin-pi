@@ -13,7 +13,7 @@ const ALLOWED_FIELDS = new Set([
 const EXPECTED = {
   workflow: ["agents-md", "architecture", "commit", "debug", "design", "implement", "plan", "project-memory", "prototype", "research", "retro", "session-close", "survey", "verify", "wait-what"],
   maintenance: ["harness", "write-skill"],
-  domain: ["apple-interface", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "herdr", "python-tooling", "rust", "teach"],
+  domain: ["apple-interface", "frontend-accessibility", "frontend-color", "frontend-design", "frontend-layout", "frontend-motion", "frontend-polish", "frontend-typography", "frontend-writing", "python-tooling", "rust", "teach"],
 };
 
 function skillFiles() {
@@ -46,7 +46,7 @@ test("skill fleet is the approved grouped surface", () => {
       .sort();
     assert.deepEqual(actual, names.slice().sort(), group);
   }
-  assert.equal(skillFiles().length, 30);
+  assert.equal(skillFiles().length, 29);
 });
 
 test("README provides valid copyable commands for every skill and bundle", () => {
@@ -208,13 +208,6 @@ test("only commit, implement and verify restate commit authority", () => {
   // The always-loaded charter owns it; other skills must not repeat it.
   for (const name of ["architecture", "debug", "design", "plan", "prototype", "research", "survey"]) {
     assert.doesNotMatch(read(`workflow/${name}/SKILL.md`), /\b(?:commits?|publish|deploy(?:ment)?)\b|\bpublication(?! date)/i, name);
-  }
-});
-
-test("Herdr guidance keeps its activation and destructive-command boundaries", () => {
-  const text = read("domain/herdr/SKILL.md").replace(/\s+/g, " ");
-  for (const boundary of [/user explicitly mentions Herdr/, /HERDR_ENV/, /bare `herdr`/, /server stop.*explicitly intends/]) {
-    assert.match(text, boundary);
   }
 });
 

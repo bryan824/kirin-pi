@@ -90,7 +90,7 @@ function usage() {
   bunx "github:bryan824/kirin-pi#<commit>" <command> [options]
 
 Commands:
-  setup     full global update: workflow skills, Herdr, instructions, hooks, Pi packages
+  setup     full global update: workflow skills, instructions, hooks, Pi packages
   install   replace selected skill trees for both Pi and Claude
 
 Bundles:
@@ -561,10 +561,7 @@ function applySkillChanges(plan, operations = directoryOperations) {
 }
 
 function sharedSkillSources(packageRoot) {
-  return validateSkillSources([
-    ...expandPacks(["workflow"], packageRoot),
-    { name: "herdr", source: path.join(packageRoot, "skills", "domain", "herdr") },
-  ]).sort((a, b) => a.name.localeCompare(b.name));
+  return validateSkillSources(expandPacks(["workflow"], packageRoot)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function syncSharedSkills(packageRoot, home = os.homedir(), operations = directoryOperations) {
@@ -741,7 +738,7 @@ function setup(options = {}, packageRoot = __dirname) {
   }
 
   console.log("\nKirin setup complete.");
-  console.log(`- ${skills.count} global skills selected (workflow + herdr); ${skills.result.added.length} target(s) added, ${skills.result.replaced.length} replaced`);
+  console.log(`- ${skills.count} global workflow skills selected; ${skills.result.added.length} target(s) added, ${skills.result.replaced.length} replaced`);
   console.log("- Claude imports shared instructions and uses Kirin's global hooks");
   if (pi) console.log("- Nico subagents installed with Kirin package-owned roles");
   else console.log("- Pi not found in PATH; Pi-specific configuration skipped");

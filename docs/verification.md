@@ -12,7 +12,7 @@ authority.
 |---|---|
 | `bun run test` | Runs repository contracts and analyzer regressions: skill/preset metadata, native AGENTS.md project entry and instruction links, authority wording, installation fixtures, shared command policy and inert extension adapters. Static prompts and resolvable pointers do not establish model compliance or successful task navigation. |
 | `bun run pack:dry` | Lists the allowlisted publication surface. Inspect entries for accidental state, missing resources and legal files; this does not publish or verify deployment. |
-| `bun test ./test/extensions.test.ts` | Compiles extension entrypoints with peers external; exercises command guards, Herdr with fake API/socket calls, and session rendering/accounting with synthetic files and installed width primitives. Covers standalone usage without extra messages. No live model, Herdr server or interactive Pi session is exercised. |
+| `bun test ./test/extensions.test.ts` | Compiles extension entrypoints with peers external; checks the approved extension inventory, exercises command guards and session rendering/accounting with synthetic files and installed width primitives. Covers standalone usage without extra messages. No live model or interactive Pi session is exercised. |
 | `bun test ./test/harness.test.cjs ./test/setup.test.cjs` | Exercises command/scope isolation, individual skills and packs, both host destinations, scope defaults, complete replacement, root/symlink containment, byte preservation, staging/rollback and instruction/settings merging in temporary roots. Pi setup calls use a fake executable. |
 | `bun test ./test/hooks.test.cjs` | Exercises argument-position guards and the `hk.pkl` integrity configuration. Neither guard prose nor fixtures constitute shell containment. |
 | `hk validate` / `git hook run pre-commit` | Separately validates the real configuration and executes the installed Git hook. Requires the existing hk/Bun tools; the hook runs the full test suite with fixing, staging and stashing disabled. Record native versions and verify index/worktree preservation. |
@@ -51,8 +51,7 @@ A few successful cases do not establish universal model superiority.
 Use actual host inventory when claiming effective skills/presets. Filesystem
 presence and frontmatter are not enabled selection. Resource/metadata fixtures
 must disable extension/model execution and isolate settings, roots and artifacts.
-Real Herdr controls/state and terminal UI checks need
-explicit scope and remain unverified when unrun. No private history scan is implied
+Real terminal UI checks need explicit scope and remain unverified when unrun. No private history scan is implied
 by the analyzer command above.
 
 ## Standing boundaries
@@ -69,9 +68,6 @@ by the analyzer command above.
 - Settings writes preserve resolved links and use exclusive same-directory staging;
   ambiguous paths are refused. Export input aliases are rejected before truncation,
   but unrelated output writes are not crash-atomic.
-- Herdr waits observe current statuses/output, not necessarily a newly submitted
-  turn. Canceling a wait does not stop its work. Aggregate wait deadlines are checked
-  between API calls; inert fixtures do not establish hung-transport timing.
 - Session totals reflect recorded usage and available pricing, not billed invoices,
   unique retained context or measured performance. Standalone usage of any kind
   counts under its recorded provider/model, never as a message or model switch.

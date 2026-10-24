@@ -1,7 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -9,35 +7,34 @@ const root = path.resolve(import.meta.dir, "..");
 const extensions = path.join(root, "extensions");
 const coreStub = {
   isToolCallEventType: (name: string, event: { toolName: string }) => event.toolName === name,
-  DEFAULT_MAX_BYTES: 50_000, DEFAULT_MAX_LINES: 2_000, formatSize: String,
-  withFileMutationQueue: (_file: string, run: () => unknown) => run(),
-  truncateHead: (content: string) => ({ content, truncated: false }),
-  truncateTail: (content: string) => ({ content, truncated: false }),
 };
 const entrypoints = [
   "guardrails.ts",
-  "herdr/index.ts",
   "session-breakdown.ts",
 ].map((relative) => path.join(extensions, relative));
 
-test("all extension entrypoints compile with Pi peers external", () => {
+test("only approved extension entrypoints ship and compile with Pi peers external", () => {
+  expect(readdirSync(extensions).sort()).toEqual(entrypoints.map((file) => path.basename(file)).sort());
   const outdir = mkdtempSync(path.join(os.tmpdir(), "kirin-extensions-"));
   const result = Bun.spawnSync([
     "bun", "build", ...entrypoints,
     "--outdir", outdir,
     "--target", "bun",
     "--external", "@earendil-works/*",
-    "--external", "typebox",
   ], { cwd: root, stderr: "pipe", stdout: "pipe" });
   expect(result.exitCode, result.stderr.toString()).toBe(0);
 });
 
 test("extensions declare their Pi minimum and use current lifecycle seams", () => {
   const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
-  for (const peer of ["pi-ai", "pi-coding-agent", "pi-tui"]) {
-    expect(pkg.peerDependencies[`@earendil-works/${peer}`]).toBe(">=0.87.1");
-    expect(pkg.peerDependenciesMeta[`@earendil-works/${peer}`].optional).toBe(true);
-  }
+  expect(pkg.peerDependencies).toEqual({
+    "@earendil-works/pi-coding-agent": ">=0.87.1",
+    "@earendil-works/pi-tui": ">=0.87.1",
+  });
+  expect(pkg.peerDependenciesMeta).toEqual({
+    "@earendil-works/pi-coding-agent": { optional: true },
+    "@earendil-works/pi-tui": { optional: true },
+  });
   expect(readFileSync(path.join(extensions, "guardrails.ts"), "utf8")).toContain('pi.on("tool_call"');
   expect(readFileSync(path.join(extensions, "session-breakdown.ts"), "utf8")).toContain("SessionManager.listAll");
 });
@@ -55,182 +52,6 @@ test("Pi guard adapters use the same command policy", async () => {
   expect(handlers.get("tool_call")!({ toolName: "read", input: { path: blocked } })).toBeUndefined();
   expect(handlers.get("user_bash")!({ command: blocked })).toMatchObject({ result: { exitCode: 1 } });
   expect(handlers.get("user_bash")!({ command: allowed })).toBeUndefined();
-});
-
-function resolvePeer(name: string) {
-  // Resolve import-only peers too, locally or from the installed Pi. No install.
-  try { return fileURLToPath(import.meta.resolve(name)); }
-  catch {
-    const pi = Bun.which("pi");
-    if (!pi) throw new Error(`These runtime tests need ${name} or Pi on PATH.`);
-    return fileURLToPath(import.meta.resolve(name, pathToFileURL(realpathSync(pi)).href));
-  }
-}
-
-function requirePeer(name: string) {
-  return createRequire(import.meta.url)(resolvePeer(name));
-}
-
-async function herdrFixture(checkActivation = false) {
-  const TypeBox = requirePeer("typebox");
-  mock.module("typebox", () => TypeBox);
-  mock.module("@earendil-works/pi-coding-agent", () => coreStub);
-  mock.module("@earendil-works/pi-ai", () => ({ StringEnum: (values: string[]) => ({ type: "string", enum: values }) }));
-  mock.module("@earendil-works/pi-tui", () => ({ Text: class { setText() {} } }));
-  const keys = ["HERDR_ENV", "HERDR_PANE_ID", "HERDR_SOCKET_PATH"];
-  const saved = keys.map((key) => process.env[key]);
-  process.env.HERDR_ENV = "1"; process.env.HERDR_PANE_ID = "w1:p1";
-  delete process.env.HERDR_SOCKET_PATH; // Never connect to the real session.
-  try {
-    const { default: register } = await import("../extensions/herdr/index.ts");
-    const own = { pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", agent: "pi", agent_status: "idle" };
-    const remote = { ...own, pane_id: "w2:p1", workspace_id: "w2", tab_id: "w2:t1" };
-    const raw = { ...own, pane_id: "w1:p2", agent: undefined, agent_status: "unknown" };
-    const panes = new Map<string, any>([own, remote, raw].map((pane) => [pane.pane_id, pane]));
-    const failures = new Map<string, any>(), calls: string[][] = [], signals: (AbortSignal | undefined)[] = [];
-    const handlers = new Map<string, Function>();
-    let tool: any;
-    const pi = { events: { on() {} }, on: (event: string, handler: Function) => handlers.set(event, handler),
-      registerTool: (value: any) => { tool = value; },
-      exec: async (_bin: string, args: string[], options: any) => {
-        calls.push(args); signals.push(options?.signal);
-        let result: any = {};
-        if (args[0] === "pane" && args[1] === "get") {
-          if (failures.has(args[2])) return failures.get(args[2]);
-          const pane = panes.get(args[2]);
-          if (!pane) return { code: 1, stdout: "", stderr: JSON.stringify({ error: { code: "pane_not_found", message: "fixture pane is absent" } }) };
-          result = { pane };
-        } else if (args[0] === "workspace" && args[1] === "create") {
-          result = { workspace: { workspace_id: "w2", label: "fixture" }, root_pane: remote };
-        } else if (args[0] === "tab" && args[1] === "create") {
-          result = { tab: { workspace_id: "w2", tab_id: "w2:t1", label: "fixture" }, root_pane: remote };
-        } else if (args[0] === "pane" && args[1] === "list") result = { panes: [...panes.values()].filter((pane) => pane.workspace_id === args[3]) };
-        else if (args[0] === "pane" && args[1] === "read") return { code: 0, stdout: "fixture output", stderr: "" };
-        else if (args[0] === "pane" && args[1] === "wait-output") result = { matched_line: "ready", read: { text: "ready" } };
-        else if (args[0] === "pane" && args[1] === "split") result = { pane: remote };
-        else if (args[0] === "tab" && args[1] === "focus") result = { tab: { tab_id: args[2], label: "fixture" } };
-        else if (!(args[0] === "pane" && ["run", "send-text", "send-keys", "close"].includes(args[1]))) throw new Error(`Unexpected inert command: ${args.join(" ")}`);
-        return { code: 0, stdout: JSON.stringify({ result }), stderr: "" };
-      },
-    };
-    if (checkActivation) for (const value of [undefined, "0", "true"]) {
-      if (value === undefined) delete process.env.HERDR_ENV; else process.env.HERDR_ENV = value;
-      register(pi as any);
-      expect(tool, `HERDR_ENV=${value}`).toBeUndefined();
-    }
-    process.env.HERDR_ENV = "1"; register(pi as any);
-    return { panes, failures, calls, signals, handlers,
-      run: (params: any, signal?: AbortSignal) => tool.execute("inert", params, signal, undefined, {}),
-    };
-  } finally {
-    keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; });
-  }
-}
-
-test("Herdr requires exact managed-environment activation", async () => {
-  await herdrFixture(true);
-});
-
-test("Herdr preserves explicit and created cross-workspace targets, focus, cwd and raw watch syntax", async () => {
-  const f = await herdrFixture();
-  await f.run({ action: "workspace_create", pane: "server", cwd: "/fixture", label: "fixture" });
-  expect(f.calls.at(-1)).toEqual(["workspace", "create", "--cwd", "/fixture", "--label", "fixture", "--no-focus"]);
-  const run = await f.run({ action: "run", pane: "server", command: "fixture; never executed" });
-  expect(run.details.workspaceId).toBe("w2");
-  expect(f.calls).toContainEqual(["pane", "run", "w2:p1", "fixture; never executed"]);
-  await f.run({ action: "read", pane: "w2:p1", raw: true });
-  expect(f.calls.at(-1)).toEqual(["pane", "read", "w2:p1", "--source", "recent", "--lines", "20", "--raw"]);
-  await f.run({ action: "watch", pane: "server", match: "ready.*", regex: true, raw: true, source: "recent-unwrapped", lines: 30, timeout: 100 });
-  expect(f.calls.at(-1)).toEqual(["pane", "wait-output", "w2:p1", "--regex", "ready.*", "--source", "recent-unwrapped", "--lines", "30", "--timeout", "100", "--raw"]);
-  await f.run({ action: "watch", pane: "server", match: "ready" });
-  expect(f.calls.at(-1)).toEqual(["pane", "wait-output", "w2:p1", "--match", "ready"]);
-  await f.run({ action: "tab_create", workspace: "w2", pane: "tests", cwd: "/fixture", focus: true });
-  expect(f.calls.at(-1)).toEqual(["tab", "create", "--workspace", "w2", "--cwd", "/fixture"]);
-  await f.run({ action: "pane_split", pane: "tests", newPane: "split", direction: "down", cwd: "/fixture" });
-  expect(f.calls.at(-1)).toEqual(["pane", "split", "w2:p1", "--direction", "down", "--cwd", "/fixture", "--no-focus"]);
-  await f.run({ action: "pane_split" });
-  expect(f.calls.at(-1)).toEqual(["pane", "split", "w1:p1", "--direction", "right", "--no-focus"]);
-  await f.run({ action: "send", pane: "server", text: "inert", keys: "C-c Enter" });
-  expect(f.calls.slice(-2)).toEqual([["pane", "send-text", "w2:p1", "inert"], ["pane", "send-keys", "w2:p1", "C-c", "Enter"]]);
-  await expect(f.run({ action: "stop", pane: "w1:p1" })).rejects.toThrow("Refusing to close the pane pi is running in");
-  expect(f.calls.some((args) => args[1] === "close")).toBe(false);
-  await f.run({ action: "focus", pane: "server" });
-  expect(f.calls.at(-1)).toEqual(["tab", "focus", "w2:t1"]);
-});
-
-test("Herdr preserves aliases on transport/malformed errors and removes only confirmed missing targets", async () => {
-  const f = await herdrFixture();
-  await f.run({ action: "workspace_create", pane: "server" });
-  for (const failure of [
-    { code: 1, stderr: "fixture socket unavailable", stdout: "" },
-    { code: 0, stderr: "", stdout: "not JSON" },
-    { code: 0, stderr: "", stdout: JSON.stringify({ result: {} }) },
-  ]) {
-    f.failures.set("w2:p1", failure);
-    await expect(f.run({ action: "read", pane: "server" })).rejects.toThrow();
-    const listed = await f.run({ action: "list" });
-    expect(listed.details.aliases.server).toEqual({ paneId: "w2:p1", workspaceId: "w2" });
-    expect(f.calls.some((args) => args[0] === "pane" && args[1] === "get" && args[2] === "server")).toBe(false);
-  }
-  f.failures.clear();
-  const success = await f.run({ action: "read", pane: "server" });
-  f.handlers.get("session_tree")!({}, { sessionManager: { getBranch: () => [{ type: "message", message: { role: "toolResult", toolName: "herdr", details: success.details } }] } });
-  expect((await f.run({ action: "read", pane: "server" })).details.aliases.server.paneId).toBe("w2:p1");
-  f.panes.delete("w2:p1");
-  await expect(f.run({ action: "read", pane: "server" })).rejects.toThrow("no longer points to a live pane and was removed");
-  expect((await f.run({ action: "list" })).details.aliases.server).toBeUndefined();
-});
-
-test("Herdr waits require an agent and preserve aggregate modes, unknown, timeouts and cancellation", async () => {
-  const f = await herdrFixture();
-  await expect(f.run({ action: "wait_agent", pane: "w1:p2", status: "unknown", timeout: 0 })).rejects.toThrow("no recognized coding agent");
-  f.panes.get("w2:p1").agent_status = "unknown";
-  const unknown = await f.run({ action: "wait_agent", pane: "w2:p1", status: "unknown", timeout: 0 });
-  expect(unknown.details.snapshot[0].agent).toBe("pi");
-  f.panes.get("w2:p1").agent_status = "working";
-  const params = { action: "wait_agent", panes: ["w1:p1", "w2:p1"], statuses: ["idle", "done"], timeout: 0 };
-  expect((await f.run({ ...params, mode: "any" })).details.snapshot).toHaveLength(2);
-  await expect(f.run({ ...params, mode: "all" })).rejects.toThrow("Timed out");
-  f.panes.get("w2:p1").agent_status = "done";
-  expect((await f.run({ ...params, mode: "all" })).details.mode).toBe("all");
-  const pre = new AbortController(); pre.abort();
-  f.calls.length = 0;
-  await expect(f.run(params, pre.signal)).rejects.toThrow(/canceled|Aborted/);
-  expect(f.calls).toHaveLength(0);
-  f.panes.get("w2:p1").agent_status = "working";
-  const late = new AbortController();
-  const timer = setTimeout(() => late.abort(), 10);
-  try { await expect(f.run({ ...params, mode: "all", timeout: 1000 }, late.signal)).rejects.toThrow(/canceled|Aborted/); }
-  finally { clearTimeout(timer); }
-  expect(f.signals).toContain(late.signal);
-});
-
-test("Herdr state reporting is TUI-only and retains identity, blocked, reload and settled state", () => {
-  // Isolated built-in socket mock: no Herdr executable, socket or model is touched.
-  const script = [
-    'import net from "node:net"; import { EventEmitter } from "node:events";',
-    'const requests = []; net.createConnection = () => { const s = new EventEmitter(); s.destroy = () => {}; s.write = (line) => { requests.push(JSON.parse(line)); queueMicrotask(() => s.emit("data", "{}")); }; queueMicrotask(() => s.emit("connect")); return s; };',
-    `const { default: register } = await import(${JSON.stringify(path.join(extensions, "herdr", "agent-state.ts"))});`,
-    'const handlers = new Map(), events = new Map(); register({ on: (n,h) => handlers.set(n,h), events: { on: (n,h) => events.set(n,h) } });',
-    'let idle = true; const ctx = { hasUI: true, mode: "rpc", isIdle: () => idle, sessionManager: { getSessionFile: () => "/fixture/session.jsonl", getSessionId: () => "fixture-id" } };',
-    'const flush = () => new Promise(resolve => setImmediate(resolve));',
-    'for (const mode of ["rpc", "json", "print", undefined]) { ctx.mode = mode; await handlers.get("session_start")({ reason: "startup" }, ctx); await flush(); }',
-    'const headless = requests.splice(0); ctx.mode = "tui"; await handlers.get("session_start")({ reason: "startup" }, ctx); await flush();',
-    'idle = false; handlers.get("agent_start")({}, ctx); await flush(); events.get("herdr:blocked")({ active: true, label: "fixture approval" }); await flush();',
-    'events.get("herdr:blocked")({ active: false }); await flush(); handlers.get("agent_settled")({}, ctx); await flush();',
-    'idle = true; handlers.get("agent_settled")({}, ctx); await flush(); idle = false; await handlers.get("session_start")({ reason: "reload" }, ctx); await flush();',
-    'console.log(JSON.stringify({ headless, requests }));',
-  ].join("\n");
-  const result = Bun.spawnSync([process.execPath, "--no-install", "-e", script], { cwd: root, env: {
-    ...process.env, HERDR_ENV: "1", HERDR_PANE_ID: "fixture-pane", HERDR_SOCKET_PATH: "/fixture/not-a-socket",
-  }, stdout: "pipe", stderr: "pipe" });
-  expect(result.exitCode, result.stderr.toString()).toBe(0);
-  const { headless, requests } = JSON.parse(result.stdout.toString());
-  expect(headless).toEqual([]);
-  expect(requests.filter((item: any) => item.method === "pane.report_agent").map((item: any) => item.params.state)).toEqual(["idle", "working", "blocked", "working", "idle", "working"]);
-  expect(requests.every((item: any) => item.params.pane_id === "fixture-pane" && item.params.agent === "pi" && item.params.agent_session_path === "/fixture/session.jsonl")).toBe(true);
-  expect(requests.map((item: any) => item.params.seq)).toEqual([...requests.map((item: any) => item.params.seq)].sort((a, b) => a - b));
-  expect(requests.at(-2).params.session_start_source).toBe("reload");
 });
 
 test("session breakdown counts standalone usage without changing message totals, discovery, summaries or DST", () => {
@@ -374,23 +195,4 @@ try {
       console.log(`session-breakdown fixture ${date}, standalone usage=${includeUsage}: ${value.frames} frames, SHA256 ${value.renderHash}`);
     }
   } finally { rmSync(home, { recursive: true, force: true }); }
-});
-
-test("Herdr keeps official state support intact and layers its tool on top", () => {
-  const state = readFileSync(path.join(extensions, "herdr", "agent-state.ts"), "utf8");
-  const integration = readFileSync(path.join(extensions, "herdr", "index.ts"), "utf8");
-  const skill = readFileSync(path.join(root, "skills", "domain", "herdr", "SKILL.md"), "utf8");
-
-  expect(state).toContain("HERDR_INTEGRATION_VERSION=8");
-  expect(state).toContain('pi.on("agent_settled"');
-  expect(state).toContain('method: "pane.report_agent_session"');
-  expect(state).toContain("sendRequestAttempt(request, 500)");
-  expect(state).toContain("sendRequestAttempt(request, 1500)");
-  expect(integration).toContain("setupHerdrAgentState(pi)");
-  expect(integration).toContain("{ additionalProperties: false })");
-  expect(integration).not.toContain("constrainedSampling:");
-  expect(integration).toContain("docs/UPSTREAM_LEDGER.md");
-  expect(state).toContain("Modified for kirin-pi");
-  expect(skill).toContain("## Pi integration");
-  expect(skill).toContain("herdr agent prompt");
 });

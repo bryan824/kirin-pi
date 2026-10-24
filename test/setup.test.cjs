@@ -39,7 +39,7 @@ const WORKFLOW_SKILLS = [
   "plan", "project-memory", "prototype", "research", "retro", "session-close", "survey", "verify", "wait-what",
 ];
 const MAINTENANCE_SKILLS = ["harness", "write-skill"];
-const SHARED_SKILLS = [...WORKFLOW_SKILLS, "herdr"].sort();
+const SHARED_SKILLS = WORKFLOW_SKILLS.slice().sort();
 
 function tempDir(prefix = "kirin-setup-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -70,7 +70,7 @@ function fixtureCheckout(base) {
   const checkout = path.join(base, "checkout");
   for (const name of WORKFLOW_SKILLS) write(path.join(checkout, "skills", "workflow", name, "SKILL.md"), `---\nname: ${name}\ndescription: test\n---\n`);
   for (const name of MAINTENANCE_SKILLS) write(path.join(checkout, "skills", "maintenance", name, "SKILL.md"), `---\nname: ${name}\ndescription: test\n---\n`);
-  write(path.join(checkout, "skills", "domain", "herdr", "SKILL.md"), "---\nname: herdr\ndescription: test\n---\n");
+  write(path.join(checkout, "skills", "domain", "unbundled", "SKILL.md"), "---\nname: unbundled\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "rust", "SKILL.md"), "---\nname: rust\ndescription: test\n---\n");
   write(path.join(checkout, "skills", "domain", "python-tooling", "SKILL.md"), "---\nname: python-tooling\ndescription: test\n---\n");
   return checkout;
@@ -132,11 +132,11 @@ test("standalone design ships its decision reference and rejects the retired ins
   assert.deepEqual(snapshotTree(home), before);
 });
 
-test("standalone frontend, prototype, Herdr and maintenance installs retain complete local guidance", (context) => {
+test("standalone frontend, prototype and maintenance installs retain complete local guidance", (context) => {
   // Installation/payload contract only; no consuming model or browser is run.
   const base = tempDir();
   context.after(() => fs.rmSync(base, { recursive: true, force: true }));
-  const names = [...SKILL_PACKS.frontend.map((entry) => path.basename(entry.source)), "prototype", "herdr", ...MAINTENANCE_SKILLS];
+  const names = [...SKILL_PACKS.frontend.map((entry) => path.basename(entry.source)), "prototype", ...MAINTENANCE_SKILLS];
   for (const name of names) {
     const project = path.join(base, name), home = path.join(base, `${name}-home`);
     fs.mkdirSync(project);
@@ -163,10 +163,6 @@ test("standalone frontend, prototype, Herdr and maintenance installs retain comp
         assert.match(text, /Throwaway status does not waive/);
         assert.ok(fs.existsSync(path.join(destination, "LOGIC.md")));
         assert.ok(fs.existsSync(path.join(destination, "UI.md")));
-      } else if (name === "herdr") {
-        assert.match(text, /installed CLI.*authority/);
-        assert.match(text, /artifact.*write authority/);
-        assert.match(text, /Canceling or timing out a wait does not stop/);
       } else if (group === "domain") {
         assert.equal(fs.existsSync(path.join(destination, "..", "frontend-design")), false);
         assert.match(text, /When `frontend-design` is installed/);
@@ -266,7 +262,7 @@ test("no-command and help invocations never run setup", () => {
   }
 });
 
-test("scope defaults follow bundles; unbundled and mixed selections need explicit valid scope", () => {
+test("scope defaults follow bundles and invalid selections fail without mutation", () => {
   for (const [args, scope] of [
     [["setup"], "global"], [["install", "workflow"], "global"], [["install", "debug"], "global"], [["install", "retro"], "global"],
     [["install", "rust"], "project"], [["install", "python"], "project"], [["install", "maintenance"], "project"],
@@ -283,7 +279,7 @@ test("scope defaults follow bundles; unbundled and mixed selections need explici
   }
   const home = tempDir();
   for (const args of [
-    ["install", "herdr"], ["install", "debug", "rust"],
+    ["install", "unknown-skill"], ["install", "debug", "rust"],
     ["install", "debug", "--scope", "project"], ["install", "retro", "--scope", "project"], ["install", "frontend", "--scope", "global"],
     ["install", "maintenance", "--scope", "global"], ["setup", "--replace"],
   ]) {
@@ -369,7 +365,10 @@ test("global commands refuse escaping skill roots before mutation", () => {
   }
 });
 
-test("CLI parsing infers fixed scopes and keeps unbundled scope explicit", () => {
+test("CLI parsing infers fixed scopes and keeps unbundled scope explicit", (context) => {
+  const base = tempDir();
+  context.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const checkout = fixtureCheckout(base);
   const defaults = { help: false, home: os.homedir() };
   assert.deepEqual(parse([]), { ...defaults, help: true });
   assert.deepEqual(parse(["setup"]), { ...defaults, command: "setup", scope: "global" });
@@ -379,8 +378,8 @@ test("CLI parsing infers fixed scopes and keeps unbundled scope explicit", () =>
   assert.deepEqual(parse(["install", "frontend", "--project", "/tmp/kirin"]), {
     ...defaults, command: "install", skills: ["frontend"], scope: "project", project: "/tmp/kirin",
   });
-  for (const scope of ["global", "project"]) assert.equal(parse(["install", "herdr", "--scope", scope]).scope, scope);
-  assert.throws(() => parse(["install", "herdr"]), /Unbundled skills require --scope/);
+  for (const scope of ["global", "project"]) assert.equal(parse(["install", "unbundled", "--scope", scope], checkout).scope, scope);
+  assert.throws(() => parse(["install", "unbundled"], checkout), /Unbundled skills require --scope/);
   assert.throws(() => parse(["install", "debug", "rust"]), /separate commands/);
   assert.throws(() => parse(["install", "debug", "--scope", "project"]), /always use global scope/);
   assert.throws(() => parse(["install", "rust", "--scope", "global"]), /always use project scope/);
@@ -542,7 +541,6 @@ test("a target created during staging is not silently replaced", () => {
 
 test("nested skill roots are rejected before either host or setup configuration changes", () => {
   const commands = [
-    { command: ["install", "herdr"], scope: "project", name: "herdr" },
     { command: ["install", "debug"], scope: "global", name: "debug" },
     { command: ["install", "rust"], scope: "project", name: "rust" },
     { command: ["setup"], scope: "global", name: "debug" },
@@ -608,10 +606,10 @@ test("root traversal rejects relative detours, link/.. paths, and self-dependent
       const agentRoot = path.join(project, ".agents", "skills");
       const claudeRoot = path.join(project, ".claude", "skills");
       fs.mkdirSync(home);
-      let selected = path.join(layout === "self-root" ? storage : agentRoot, "herdr");
-      write(path.join(selected, "SKILL.md"), "old debug\n");
+      let selected = path.join(layout === "self-root" ? storage : agentRoot, "rust");
+      write(path.join(selected, "SKILL.md"), "old rust\n");
       if (layout === "case-alias") {
-        const upper = path.join(path.dirname(selected), "HERDR");
+        const upper = path.join(path.dirname(selected), "RUST");
         if (fs.existsSync(upper)) {
           fs.renameSync(selected, upper);
           selected = upper;
@@ -633,7 +631,7 @@ test("root traversal rejects relative detours, link/.. paths, and self-dependent
         } else if (layout === "dots") {
           fs.mkdirSync(path.join(storage, "root"));
           route = `${bridge}/../root`;
-        } else route = path.join(path.dirname(selected), "HERDR", "bridge");
+        } else route = path.join(path.dirname(selected), "RUST", "bridge");
         // Do not normalize link/.. away before the filesystem resolves it.
         fs.symlinkSync(layout === "dots" ? route : path.relative(path.dirname(claudeRoot), route), claudeRoot, "dir");
       }
@@ -641,7 +639,7 @@ test("root traversal rejects relative detours, link/.. paths, and self-dependent
       assert.equal(fs.statSync(affectedRoot).isDirectory(), true, layout);
       write(path.join(affectedRoot, "custom", "SKILL.md"), "keep custom\n");
       const before = snapshotTree(base);
-      const result = spawnSync(process.execPath, [script, "install", "herdr", "--scope", "project"], {
+      const result = spawnSync(process.execPath, [script, "install", "rust", "--scope", "project"], {
         cwd: project,
         env: { ...process.env, HOME: home, PATH: "", PI_BIN: "" },
         encoding: "utf8",
@@ -845,7 +843,7 @@ test("global workflow sync preserves unselected skills and excludes maintenance"
   assert.equal(fs.readFileSync(record, "utf8"), "preserve existing decisions\n");
 });
 
-test("a missing selected source fails before either destination changes", () => {
+test("a missing workflow root fails before either destination changes", () => {
   const base = tempDir();
   const home = path.join(base, "home");
   const checkout = fixtureCheckout(base);
@@ -854,10 +852,10 @@ test("a missing selected source fails before either destination changes", () => 
   syncSharedSkills(checkout, home);
 
   write(path.join(checkout, "skills", "workflow", "design", "updated.txt"), "updated\n");
-  fs.rmSync(path.join(checkout, "skills", "domain", "herdr"), { recursive: true });
-  assert.throws(() => syncSharedSkills(checkout, home), /Missing Kirin skill source/);
+  fs.rmSync(path.join(checkout, "skills", "workflow"), { recursive: true });
+  assert.throws(() => syncSharedSkills(checkout, home), /Missing Kirin skill root/);
   for (const dir of roots) {
-    assert.equal(fs.existsSync(path.join(dir, "herdr")), true);
+    assert.equal(fs.existsSync(path.join(dir, "debug", "SKILL.md")), true);
     assert.equal(fs.existsSync(path.join(dir, "design", "updated.txt")), false);
   }
 });
@@ -882,7 +880,7 @@ test("a later shared-skill stage failure leaves both old trees intact", () => {
   assert.throws(() => syncSharedSkills(checkout, home, operations), /later copy failed/);
   for (const root of roots) {
     assert.equal(fs.existsSync(path.join(root, "design", "updated.txt")), false);
-    assert.equal(fs.existsSync(path.join(root, "herdr", "SKILL.md")), true);
+    assert.equal(fs.existsSync(path.join(root, "debug", "SKILL.md")), true);
   }
 });
 

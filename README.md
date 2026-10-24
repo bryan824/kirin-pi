@@ -23,7 +23,7 @@ Sources, installed copies, and native hosts have separate owners.
 ```mermaid
 flowchart LR
   sources["skills/ sources"] --> installer["setup.cjs<br/>Explicit installation"]
-  installer --> global["Global copies<br/>Workflow skills + herdr"]
+  installer --> global["Global copies<br/>Workflow skills"]
   installer --> project["Project copies<br/>Optional domain bundles"]
   installer --> local["Kirin checkout copies<br/>Maintenance skills"]
   installer --> charter["Shared charter<br/>Scope, approval, verification"]
@@ -86,7 +86,6 @@ flowchart TB
   subgraph maintenance["Kirin checkout maintenance"]
     shape["Harness and prompt quality<br/>harness · write-skill"]
   end
-  control["Explicit Herdr control<br/>herdr"]
 ```
 
 The tables below list every shipped skill and a copyable install command. Run
@@ -134,7 +133,6 @@ Use `setup` for a full global update, rather than updating workflow skills one b
 | `frontend-polish` | Refine surfaces, elevation, optical alignment, and icon craft. | `bun run kirin-pi install frontend-polish` |
 | `frontend-typography` | Keep type hierarchy, wrapping, values, and language rendering stable. | `bun run kirin-pi install frontend-typography` |
 | `frontend-writing` | Write clear, consistent, localization-safe interface copy. | `bun run kirin-pi install frontend-writing` |
-| `herdr` | Official Herdr control guidance plus Kirin's typed Pi integration. | `bun run kirin-pi install herdr --scope global` |
 | `python-tooling` | uv, Ruff, and ty as one Python toolchain. | `bun run kirin-pi install python-tooling` |
 | `rust` | Bryan's Rust API, crate, error, safety, and verification conventions. | `bun run kirin-pi install rust` |
 | `teach` | Explicit guided lessons in chat; persistent courses and learning records only on request. | `bun run kirin-pi install teach` |
@@ -149,11 +147,10 @@ do not require Pi; host peers remain optional package dependencies.
 | Extension | Purpose |
 |---|---|
 | `guardrails` | Guard common Git/Python command accidents. |
-| `herdr` | Pane/workspace orchestration and settled Pi status reporting. |
 | `session-breakdown` | Interactive session/token/model/cost dashboard. |
 
 The command guard is accident prevention, not a shell sandbox. Session totals are
-recorded usage, not invoices, and Herdr waits are not completion proof. See
+recorded usage, not invoices. See
 [verification](docs/verification.md#standing-boundaries) for the full limits.
 
 ### Claude native equivalents
@@ -163,7 +160,6 @@ Claude hooks cover lifecycle events, not Pi's full extension API. Kirin uses the
 | Pi extension | Claude Code equivalent |
 |---|---|
 | `guardrails` | Global `PreToolUse:Bash` policy in `~/.claude/settings.json`, shared with Pi. |
-| `herdr` | Shared Herdr skill and CLI. Herdr owns Claude agent-state hooks; Pi's typed aliases and session replay stay Pi-only. |
 | `session-breakdown` | Claude's built-in `/insights`; Pi's custom TUI and exact 7/30/90-day view stay Pi-only. |
 
 ### Subagent presets
@@ -202,15 +198,13 @@ unless you add `--project /path/to/project`.
 
 | Use case | Command | Scope and contents |
 |---|---|---|
-| Full global update | `bun run kirin-pi setup` | All 15 workflow skills, herdr, charter, Claude guard, and Pi packages. |
+| Full global update | `bun run kirin-pi setup` | All 15 workflow skills, charter, Claude guard, and Pi packages. |
 | Workflow copies only | `bun run kirin-pi install workflow` | Global; all workflow skills. No settings or package updates. |
 | Maintain this harness | `bun run kirin-pi install maintenance` | Project; both maintenance skills. Use in this Kirin checkout. |
 | Web interfaces | `bun run kirin-pi install frontend` | Project; all nine frontend and Apple-interface skills. |
 | Rust conventions | `bun run kirin-pi install rust` | Project; rust. |
 | Python conventions | `bun run kirin-pi install python` | Project; python-tooling. |
 | Guided lessons | `bun run kirin-pi install teaching` | Project; teach. |
-| Global Herdr guidance only | `bun run kirin-pi install herdr --scope global` | Global; no runtime setup. |
-| Project Herdr guidance only | `bun run kirin-pi install herdr --scope project` | Project; no runtime setup. |
 | List command help | `bun run kirin-pi --help` | Read-only; no installation. |
 
 Every individual skill command is listed in the skill tables above. Multiple
@@ -221,9 +215,9 @@ bun run kirin-pi install frontend rust python --project /path/to/project
 ```
 
 Workflow skills always install globally. Domain and maintenance bundles always
-install at project scope. Unbundled skills require `--scope global|project`;
-currently `herdr` is the unbundled skill. Do not mix global workflow selections
-and project selections in one command. There is no replacement toggle.
+install at project scope. Unbundled skills require `--scope global|project`.
+Do not mix global workflow selections and project selections in one command.
+There is no replacement toggle.
 
 From a published commit, run the same commands without a checkout:
 
@@ -239,7 +233,7 @@ old checkout.
 
 `setup` updates the global harness:
 
-- replaces every workflow skill and `herdr` in both `~/.agents/skills/` and `~/.claude/skills/`
+- replaces every workflow skill in both `~/.agents/skills/` and `~/.claude/skills/`
 - merges the charter block into `~/.agents/AGENTS.md`, the canonical copy, then copies that file to `~/.pi/agent/AGENTS.md` (when `pi` is on `PATH`) and `~/.claude/AGENTS.md`; Claude reads it through the `@AGENTS.md` import in `~/.claude/CLAUDE.md`, whose custom text is kept
 - copies Claude runtime files under `~/.claude/kirin/` and merges the guard hook into `~/.claude/settings.json`, preserving unrelated settings and hooks
 - backs up changed instruction copies, runtime files and settings under the host's `kirin-backups/<run>/` directory
@@ -254,7 +248,6 @@ skill are rejected before changes. They do not prune unrelated installations.
 Project installs warn about global copies of the same name but do not migrate them.
 
 Restart active agents after updating. Trust project-local resources in Pi.
-The Herdr application is a separate system install.
 
 ## Project memory
 

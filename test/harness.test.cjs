@@ -184,10 +184,9 @@ test("required legal and current-truth docs exist", () => {
   for (const notice of ["Copyright (c) 2026 Jakub Krehel", "Copyright (c) 2026 Emil Kowalski"]) {
     assert.ok(ledger.includes(notice), notice);
   }
-  assert.match(ledger, /herdrdev\/herdr/);
   assert.match(ledger, /Copyright 2024 Anthropic PBC/);
   assert.match(ledger, /frontend-design[\s\S]*Apache-2\.0/);
-  for (const file of ["extensions/herdr/agent-state.ts", "extensions/session-breakdown.ts", "skills/domain/frontend-design/SKILL.md", "skills/domain/herdr/SKILL.md"]) {
+  for (const file of ["extensions/session-breakdown.ts", "skills/domain/frontend-design/SKILL.md"]) {
     assert.match(fs.readFileSync(path.join(root, file), "utf8"), /Modified for kirin-pi/, file);
   }
 });

@@ -14,8 +14,6 @@ Sole record of third-party sources considered, borrowed from, or required by Kir
 | [`tintinweb/pi-subagents`](https://github.com/tintinweb/pi-subagents) | `0.15.0` and `c83dd82` | Pending | Rejected as a replacement: different APIs, context and lifecycle. No co-install. | Nico loses a bounded-delegation capability Tintin provides more simply. |
 | [`nicobailon/pi-subagents`](https://github.com/nicobailon/pi-subagents) | `0.50.0` and `c091da1` | Pending | Runtime for Kirin's agent fleet, workflows, worktrees, missions, artifacts and supervision. Kirin keeps nine exact-name overrides with thin prompts and schedules disabled; installed 0.66.0 contracts are the assessed floor. Permissions and worktrees are not sandboxing. | Agent schema, mission defaults, workflow/worktree contracts, supervisor channel or discovery change. |
 | [`juicesharp/rpiv-mono`](https://github.com/juicesharp/rpiv-mono) | current `rpiv-pi/agents` reviewed | Pending | Specialist-role provenance for the current fleet. No sync engine, task store or grader. | Its agents gain a distinct role missing from Kirin. |
-| [`herdrdev/herdr`](https://github.com/herdrdev/herdr) | integration version 7 and current skill | Pending | Sync targets: official [state asset](https://github.com/herdrdev/herdr/blob/master/src/integration/assets/pi/herdr-agent-state.ts) and [skill](https://github.com/herdrdev/herdr/blob/master/skills/herdr/SKILL.md). Kirin keeps identity/settlement and typed target/wait handling; 0.9.x CLI contracts assessed, not every live lifecycle. | Either official file changes. |
-| [`ogulcancelik/pi-extensions`](https://github.com/ogulcancelik/pi-extensions) | Herdr integration revision `1deb3f1` | Pending | Typed Herdr client basis; no second client or duplicate owners. | Official Herdr tool support supersedes it. |
 | [`mitsuhiko/agent-stuff`](https://github.com/mitsuhiko/agent-stuff) | current session breakdown reviewed | Pending | Session-breakdown and command-policy origin; keeps native discovery and usage accounting. | Pi ships equivalent usage UI or the session format changes. |
 | [`steipete/agent-scripts`](https://github.com/steipete/agent-scripts) | skill-cleaner revision `2d007c1` | Pending | Analyzer origin, rewritten for Pi-first evidence with honest coverage limits; also frontend-design lineage under separate Apache terms. | The analyzer gains useful Pi-first evidence or parser support. |
 | [`mattpocock/skills`](https://github.com/mattpocock/skills) | `84fdeff`; principles from [`959a8e9`](https://github.com/mattpocock/skills/tree/959a8e9f1edc3adbe2f7e3054bb6fbefa6696260), the [skills series](https://www.aihero.dev/skills-setup-matt-pocock-skills), [teach](https://www.aihero.dev/skills-teach), [wait-what](https://www.aihero.dev/skills-wait-what), [retro](https://www.aihero.dev/skills-retro) overviews, the [2026-09-17 interview](https://newsletter.pragmaticengineer.com/p/ai-skills-with-matt-pocock) and author posts 2026-09-28 to 10-08 (user-supplied notes); architecture-series articles and 12 related source skills reviewed at [`49dd158`](https://github.com/mattpocock/skills/tree/49dd158d1076134a641b33efb035946536778336), a scoped review rather than a repository checkpoint | [`b0618bc`](https://github.com/mattpocock/skills/tree/b0618bc436ad893b3c5e84e55fba86586d34a404) (v1.3.1, 2026-10-08) | Design/planning and prototype text provenance; pointer, memory and mechanical-check principles; `teach`, `wait-what` and `retro` adapted in original wording. v1.3 deltas folded into verify, design, TDD and plan, plus a YAML frontmatter check. Optional candidate discovery and reports are consolidated in `architecture`, in original wording; no separate upstream skills or report scripts are imported. Excluded: router, tracker/triage/setup/wizard/wayfinder, glossary mandate, `pr`, chief-of-staff, compulsory fanout and automatic commit/publication. | A distinct mindset or artifact transition appears. |
@@ -46,8 +44,6 @@ contract changes. This runtime relationship advances no checkpoint above.
 
 | Kirin surface | Relationship | License |
 |---|---|---|
-| `extensions/herdr/index.ts` | Modified substantial orchestration code | MIT, Can Celik |
-| `extensions/herdr/agent-state.ts`, `skills/domain/herdr/SKILL.md` | Official Herdr support, kept current then extended | Apache-2.0 |
 | `extensions/session-breakdown.ts` | Modified substantial code | Apache-2.0 |
 | `skills/maintenance/harness/scripts/skill-cleaner.ts` | Modified substantial code | MIT, Peter Steinberger |
 | `skills/domain/frontend-design/SKILL.md` | Retained aesthetic-prompt lineage via Agent Scripts; substantially rewritten, original adoption revision unrecorded | Apache-2.0, Anthropic PBC (separate from the repository's MIT license) |
@@ -66,8 +62,6 @@ The MIT permission text below applies to the identified MIT-licensed borrowed su
 Copyright (c) 2026 Matt Pocock
 
 Copyright (c) 2026 juicesharp
-
-Copyright (c) 2025 Can Celik
 
 Copyright (c) 2026 Peter Steinberger
 
@@ -97,8 +91,7 @@ SOFTWARE.
 
 ## Apache-2.0 notice
 
-`extensions/herdr/agent-state.ts`, `skills/domain/herdr/SKILL.md`,
-`extensions/session-breakdown.ts`, and the retained aesthetic lineage in
+`extensions/session-breakdown.ts` and the retained aesthetic lineage in
 `skills/domain/frontend-design/SKILL.md` are Apache-2.0-licensed sources or
 derivatives. Modified files carry modification notices. The complete license is
 distributed as `LICENSE-APACHE`. No upstream `NOTICE` file was found for these
